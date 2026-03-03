@@ -350,21 +350,21 @@ static RValue builtinSqr(VMContext* ctx, RValue* args, int32_t argCount) {
 
 static RValue builtinIsString(VMContext* ctx, RValue* args, int32_t argCount) {
     (void) ctx;
-    if (1 > argCount) return RValue_makeReal(0.0);
-    return RValue_makeReal((args[0].type == RVALUE_STRING) ? 1.0 : 0.0);
+    if (1 > argCount) return RValue_makeBool(false);
+    return RValue_makeBool(args[0].type == RVALUE_STRING);
 }
 
 static RValue builtinIsReal(VMContext* ctx, RValue* args, int32_t argCount) {
     (void) ctx;
-    if (1 > argCount) return RValue_makeReal(0.0);
-    double result = (args[0].type == RVALUE_REAL || args[0].type == RVALUE_INT32 || args[0].type == RVALUE_INT64 || args[0].type == RVALUE_BOOL) ? 1.0 : 0.0;
-    return RValue_makeReal(result);
+    if (1 > argCount) return RValue_makeBool(false);
+    bool result = args[0].type == RVALUE_REAL || args[0].type == RVALUE_INT32 || args[0].type == RVALUE_INT64 || args[0].type == RVALUE_BOOL;
+    return RValue_makeBool(result);
 }
 
 static RValue builtinIsUndefined(VMContext* ctx, RValue* args, int32_t argCount) {
     (void) ctx;
-    if (1 > argCount) return RValue_makeReal(1.0);
-    return RValue_makeReal((args[0].type == RVALUE_UNDEFINED) ? 1.0 : 0.0);
+    if (1 > argCount) return RValue_makeBool(true);
+    return RValue_makeBool(args[0].type == RVALUE_UNDEFINED);
 }
 
 // ===[ STRING FUNCTIONS ]===

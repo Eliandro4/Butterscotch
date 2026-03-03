@@ -717,11 +717,20 @@ static void handleNeg(VMContext* ctx) {
     stackPush(&ctx->stack, RValue_makeReal(result));
 }
 
-static void handleNot(VMContext* ctx) {
+static void handleNot(VMContext* ctx, uint32_t instr) {
     RValue a = stackPop(&ctx->stack);
-    int32_t result = ~RValue_toInt32(a);
-    RValue_free(&a);
-    stackPush(&ctx->stack, RValue_makeInt32(result));
+    uint8_t type1 = instrType1(instr);
+    if (GML_TYPE_BOOL == type1) {
+        // Logical NOT: compiler emits this for the ! operator on boolean expressions
+        int32_t result = (RValue_toInt32(a) == 0) ? 1 : 0;
+        RValue_free(&a);
+        stackPush(&ctx->stack, RValue_makeBool(result != 0));
+    } else {
+        // Bitwise NOT: used for ~ operator on integer types
+        int32_t result = ~RValue_toInt32(a);
+        RValue_free(&a);
+        stackPush(&ctx->stack, RValue_makeInt32(result));
+    }
 }
 
 static void handleShl(VMContext* ctx) {
@@ -1065,7 +1074,7 @@ static RValue executeLoop(VMContext* ctx) {
 
             // Unary
             case OP_NEG: handleNeg(ctx); break;
-            case OP_NOT: handleNot(ctx); break;
+            case OP_NOT: handleNot(ctx, instr); break;
 
             // Type conversion
             case OP_CONV:
