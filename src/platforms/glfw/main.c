@@ -131,6 +131,7 @@ int main(int argc, char* argv[]) {
 
     if (args.headless) {
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+        glfwSwapInterval(0); // Disable v-sync if we are running in headless mode
     }
 
     GLFWwindow* window = glfwCreateWindow((int) gen8->defaultWindowWidth, (int) gen8->defaultWindowHeight, windowTitle, nullptr, nullptr);
