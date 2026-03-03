@@ -210,8 +210,8 @@ int main(int argc, char* argv[]) {
         Room* activeRoom = runner->currentRoom;
 
         int rInt = BGR_R(activeRoom->backgroundColor);
-        int gInt = BGR_R(activeRoom->backgroundColor);
-        int bInt = BGR_R(activeRoom->backgroundColor);
+        int gInt = BGR_G(activeRoom->backgroundColor);
+        int bInt = BGR_B(activeRoom->backgroundColor);
 
         glClearColor(rInt / 255.0f, gInt / 255.0f, bInt / 255.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
