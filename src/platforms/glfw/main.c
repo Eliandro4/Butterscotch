@@ -206,22 +206,23 @@ int main(int argc, char* argv[]) {
     }
 
     // Main loop
-    int frameCount = 0;
     while (!glfwWindowShouldClose(window)) {
-        int rInt = BGR_R(runner->currentRoom->backgroundColor);
-        int gInt = BGR_R(runner->currentRoom->backgroundColor);
-        int bInt = BGR_R(runner->currentRoom->backgroundColor);
+        Room* activeRoom = runner->currentRoom;
+
+        int rInt = BGR_R(activeRoom->backgroundColor);
+        int gInt = BGR_R(activeRoom->backgroundColor);
+        int bInt = BGR_R(activeRoom->backgroundColor);
 
         glClearColor(rInt / 255.0f, gInt / 255.0f, bInt / 255.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // Capture screenshot if this frame matches a requested frame
-        bool shouldScreenshot = hmget(args.screenshotFrames, frameCount);
+        bool shouldScreenshot = hmget(args.screenshotFrames, runner->frameCount);
 
         if (shouldScreenshot) {
-            captureScreenshot(args.screenshotPattern, frameCount, (int) gen8->defaultWindowWidth, (int) gen8->defaultWindowHeight);
+            captureScreenshot(args.screenshotPattern, runner->frameCount, (int) gen8->defaultWindowWidth, (int) gen8->defaultWindowHeight);
 
-            hmdel(args.screenshotFrames, frameCount);
+            hmdel(args.screenshotFrames, runner->frameCount);
 
             if (hmlen(args.screenshotFrames) == 0) {
                 // All screenshots have been taken! Bail out!!
@@ -229,7 +230,7 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        frameCount++;
+        runner->frameCount++;
 
         glfwSwapBuffers(window);
         glfwPollEvents();
