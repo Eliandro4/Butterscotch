@@ -40,6 +40,7 @@ typedef struct {
     bool traceFrames;
     bool printRooms;
     bool printDeclaredFunctions;
+    int exitAtFrame;
 } CommandLineArgs;
 
 static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) {
@@ -62,10 +63,12 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
         {"trace-opcodes", required_argument,       nullptr, 'o'},
         {"trace-stack", required_argument,         nullptr, 'S'},
         {"trace-frames", no_argument, nullptr, 'k'},
+        {"exit-at-frame", required_argument, nullptr, 'x'},
         {nullptr,               0,                 nullptr,  0 }
     };
 
     args->screenshotFrames = nullptr;
+    args->exitAtFrame = -1;
 
     int opt;
     while ((opt = getopt_long(argc, argv, "", longOptions, nullptr)) != -1) {
@@ -126,6 +129,16 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
             case 'k':
                 args->traceFrames = true;
                 break;
+            case 'x': {
+                char* endPtr;
+                long frame = strtol(optarg, &endPtr, 10);
+                if (*endPtr != '\0' || 0 > frame) {
+                    fprintf(stderr, "Error: Invalid frame number '%s' for --exit-at-frame\n", optarg);
+                    exit(1);
+                }
+                args->exitAtFrame = (int) frame;
+                break;
+            }
             default:
                 fprintf(stderr, "Usage: %s [--headless] [--screenshot=PATTERN] [--screenshot-at-frame=N ...] <path to data.win or game.unx>\n", argv[0]);
                 exit(1);
@@ -309,13 +322,11 @@ int main(int argc, char* argv[]) {
 
         if (shouldScreenshot) {
             captureScreenshot(args.screenshotPattern, runner->frameCount, (int) gen8->defaultWindowWidth, (int) gen8->defaultWindowHeight);
+        }
 
-            hmdel(args.screenshotFrames, runner->frameCount);
-
-            if (hmlen(args.screenshotFrames) == 0) {
-                // All screenshots have been taken! Bail out!!
-                glfwSetWindowShouldClose(window, GLFW_TRUE);
-            }
+        if (args.exitAtFrame >= 0 && runner->frameCount >= args.exitAtFrame) {
+            printf("Exiting at frame %d (--exit-at-frame)\n", runner->frameCount);
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
 
         if (args.traceFrames)
