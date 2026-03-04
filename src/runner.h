@@ -60,4 +60,5 @@ void Runner_draw(Runner* runner);
 Instance* Runner_createInstance(Runner* runner, double x, double y, int32_t objectIndex);
 void Runner_destroyInstance(Runner* runner, Instance* inst);
 void Runner_cleanupDestroyedInstances(Runner* runner);
+void Runner_dumpState(Runner* runner);
 void Runner_free(Runner* runner);

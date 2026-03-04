@@ -27,6 +27,7 @@ typedef struct {
     const char* dataWinPath;
     const char* screenshotPattern;
     FrameSetEntry* screenshotFrames;
+    FrameSetEntry* dumpFrames;
     StringBooleanEntry* varReadsToBeTraced;
     StringBooleanEntry* varWritesToBeTraced;
     StringBooleanEntry* functionCallsToBeTraced;
@@ -61,6 +62,7 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
         {"trace-stack", required_argument,         nullptr, 'S'},
         {"trace-frames", no_argument, nullptr, 'k'},
         {"exit-at-frame", required_argument, nullptr, 'x'},
+        {"dump-frame", required_argument, nullptr, 'd'},
         {nullptr,               0,                 nullptr,  0 }
     };
 
@@ -130,6 +132,16 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
                 args->exitAtFrame = (int) frame;
                 break;
             }
+            case 'd': {
+                char* endPtr;
+                long frame = strtol(optarg, &endPtr, 10);
+                if (*endPtr != '\0' || 0 > frame) {
+                    fprintf(stderr, "Error: Invalid frame number '%s' for --dump-frame\n", optarg);
+                    exit(1);
+                }
+                hmput(args->dumpFrames, (int) frame, true);
+                break;
+            }
             default:
                 fprintf(stderr, "Usage: %s [--headless] [--screenshot=PATTERN] [--screenshot-at-frame=N ...] <path to data.win or game.unx>\n", argv[0]);
                 exit(1);
@@ -151,6 +163,7 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
 
 static void freeCommandLineArgs(CommandLineArgs* args) {
     hmfree(args->screenshotFrames);
+    hmfree(args->dumpFrames);
     shfree(args->varReadsToBeTraced);
     shfree(args->varWritesToBeTraced);
     shfree(args->functionCallsToBeTraced);
@@ -358,6 +371,11 @@ int main(int argc, char* argv[]) {
 
         // Run one game step (Begin Step, Keyboard, Alarms, Step, End Step, room transitions)
         Runner_step(runner);
+
+        // Dump full runner state if this frame was requested
+        if (hmget(args.dumpFrames, runner->frameCount)) {
+            Runner_dumpState(runner);
+        }
 
         Room* activeRoom = runner->currentRoom;
 

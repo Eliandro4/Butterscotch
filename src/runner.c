@@ -471,6 +471,128 @@ void Runner_step(Runner* runner) {
     runner->frameCount++;
 }
 
+// ===[ State Dump ]===
+
+void Runner_dumpState(Runner* runner) {
+    DataWin* dataWin = runner->dataWin;
+    VMContext* vm = runner->vmContext;
+    int32_t instanceCount = (int32_t) arrlen(runner->instances);
+
+    printf("=== Frame %d State Dump ===\n", runner->frameCount);
+    printf("Room: %s (index %d)\n", runner->currentRoom->name, runner->currentRoomIndex);
+    printf("Instance count: %d\n", instanceCount);
+
+    repeat(instanceCount, i) {
+        Instance* inst = runner->instances[i];
+        if (inst == nullptr || !inst->active) continue;
+
+        const char* objName = (inst->objectIndex >= 0 && dataWin->objt.count > (uint32_t) inst->objectIndex) ? dataWin->objt.objects[inst->objectIndex].name : "<unknown>";
+
+        const char* spriteName = "<none>";
+        if (inst->spriteIndex >= 0 && dataWin->sprt.count > (uint32_t) inst->spriteIndex) {
+            spriteName = dataWin->sprt.sprites[inst->spriteIndex].name;
+        }
+
+        printf("\n--- Instance #%d (%s, objectIndex=%d) ---\n", inst->instanceId, objName, inst->objectIndex);
+        printf("  Position: (%g, %g)\n", inst->x, inst->y);
+        printf("  Depth: %d\n", inst->depth);
+        printf("  Sprite: %s (index %d), imageIndex=%g, imageSpeed=%g\n", spriteName, inst->spriteIndex, inst->imageIndex, inst->imageSpeed);
+        printf("  Scale: (%g, %g), Angle: %g, Alpha: %g, Blend: 0x%06X\n", inst->imageXscale, inst->imageYscale, inst->imageAngle, inst->imageAlpha, inst->imageBlend);
+        printf("  Visible: %s, Active: %s, Solid: %s, Persistent: %s\n", inst->visible ? "true" : "false", inst->active ? "true" : "false", inst->solid ? "true" : "false", inst->persistent ? "true" : "false");
+
+        // Active alarms
+        bool hasAlarm = false;
+        repeat(GML_ALARM_COUNT, alarmIdx) {
+            if (inst->alarm[alarmIdx] >= 0) {
+                if (!hasAlarm) { printf("  Alarms:"); hasAlarm = true; }
+                printf(" [%d]=%d", alarmIdx, inst->alarm[alarmIdx]);
+            }
+        }
+        if (hasAlarm) printf("\n");
+
+        // Self variables (non-array)
+        bool hasSelfVars = false;
+        repeat(dataWin->vari.variableCount, varIdx) {
+            Variable* var = &dataWin->vari.variables[varIdx];
+            if (var->instanceType != INSTANCE_SELF || var->varID < 0) continue;
+            if ((uint32_t) var->varID >= inst->selfVarCount) continue;
+            RValue val = inst->selfVars[var->varID];
+            if (val.type == RVALUE_UNDEFINED) continue;
+
+            if (!hasSelfVars) { printf("  Self Variables:\n"); hasSelfVars = true; }
+            char* valStr = RValue_toStringFancy(val);
+            printf("    %s = %s\n", var->name, valStr);
+            free(valStr);
+        }
+
+        // Self arrays
+        int64_t selfArrayLen = hmlen(inst->selfArrayMap);
+        if (selfArrayLen > 0) {
+            printf("  Self Arrays:\n");
+            repeat(selfArrayLen, arrIdx) {
+                int64_t key = inst->selfArrayMap[arrIdx].key;
+                RValue val = inst->selfArrayMap[arrIdx].value;
+                int32_t varID = (int32_t) (key >> 32);
+                int32_t arrayIndex = (int32_t) (key & 0xFFFFFFFF);
+
+                // Find variable name by scanning VARI entries
+                const char* varName = "<unknown>";
+                repeat(dataWin->vari.variableCount, varIdx) {
+                    Variable* var = &dataWin->vari.variables[varIdx];
+                    if (var->varID == varID && var->instanceType == INSTANCE_SELF) {
+                        varName = var->name;
+                        break;
+                    }
+                }
+
+                char* valStr = RValue_toStringFancy(val);
+                printf("    %s[%d] = %s\n", varName, arrayIndex, valStr);
+                free(valStr);
+            }
+        }
+    }
+
+    // Global variables (non-array)
+    printf("\n=== Global Variables ===\n");
+    repeat(dataWin->vari.variableCount, varIdx) {
+        Variable* var = &dataWin->vari.variables[varIdx];
+        if (var->instanceType != INSTANCE_GLOBAL || var->varID < 0) continue;
+        if ((uint32_t) var->varID >= vm->globalVarCount) continue;
+        RValue val = vm->globalVars[var->varID];
+        if (val.type == RVALUE_UNDEFINED) continue;
+
+        char* valStr = RValue_toStringFancy(val);
+        printf("  %s = %s\n", var->name, valStr);
+        free(valStr);
+    }
+
+    // Global arrays
+    int64_t globalArrayLen = hmlen(vm->globalArrayMap);
+    if (globalArrayLen > 0) {
+        repeat(globalArrayLen, arrIdx) {
+            int64_t key = vm->globalArrayMap[arrIdx].key;
+            RValue val = vm->globalArrayMap[arrIdx].value;
+            int32_t varID = (int32_t) (key >> 32);
+            int32_t arrayIndex = (int32_t) (key & 0xFFFFFFFF);
+
+            const char* varName = "<unknown>";
+            repeat(dataWin->vari.variableCount, varIdx) {
+                Variable* var = &dataWin->vari.variables[varIdx];
+                if (var->varID == varID && var->instanceType == INSTANCE_GLOBAL) {
+                    varName = var->name;
+                    break;
+                }
+            }
+
+            char* valStr = RValue_toStringFancy(val);
+            printf("  %s[%d] = %s\n", varName, arrayIndex, valStr);
+            free(valStr);
+        }
+    }
+
+    printf("\n=== End Frame %d State Dump ===\n", runner->frameCount);
+}
+
 void Runner_free(Runner* runner) {
     if (runner == nullptr) return;
 
