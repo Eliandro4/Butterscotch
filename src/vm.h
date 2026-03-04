@@ -161,6 +161,7 @@ typedef struct VMContext {
     // funcRefMap value = funcIndex
     struct { uint32_t key; uint32_t value; }* varRefMap;
     struct { uint32_t key; uint32_t value; }* funcRefMap;
+    bool hasFixedSeed;
 } VMContext;
 
 // ===[ Public API ]===

@@ -46,6 +46,8 @@ typedef struct {
     bool printDeclaredFunctions;
     int exitAtFrame;
     double speedMultiplier;
+    int seed;
+    bool hasSeed;
 } CommandLineArgs;
 
 static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) {
@@ -71,6 +73,7 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
         {"dump-frame-json", required_argument, nullptr, 'j'},
         {"dump-frame-json-file", required_argument, nullptr, 'J'},
         {"speed", required_argument, nullptr, 'M'},
+        {"seed", required_argument, nullptr, 'Z'},
         {nullptr,               0,                 nullptr,  0 }
     };
 
@@ -172,6 +175,17 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
                     exit(1);
                 }
                 args->speedMultiplier = speed;
+                break;
+            }
+            case 'Z': {
+                char* endPtr;
+                long seedVal = strtol(optarg, &endPtr, 10);
+                if (*endPtr != '\0') {
+                    fprintf(stderr, "Error: Invalid seed value '%s' for --seed\n", optarg);
+                    exit(1);
+                }
+                args->seed = (int) seedVal;
+                args->hasSeed = true;
                 break;
             }
             default:
@@ -314,6 +328,12 @@ int main(int argc, char* argv[]) {
 
     // Initialize VM
     VMContext* vm = VM_create(dataWin);
+
+    if (args.hasSeed) {
+        srand((unsigned int) args.seed);
+        vm->hasFixedSeed = true;
+        printf("Using fixed RNG seed: %d\n", args.seed);
+    }
 
     if (args.printRooms) {
         forEachIndexed(Room, room, idx, dataWin->room.rooms, dataWin->room.count) {

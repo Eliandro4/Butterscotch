@@ -771,7 +771,7 @@ static RValue builtinChoose([[maybe_unused]] VMContext* ctx, RValue* args, int32
 }
 
 static RValue builtinRandomize(VMContext* ctx, [[maybe_unused]] RValue* args, [[maybe_unused]] int32_t argCount) {
-    logStubbedFunction(ctx, "randomize");
+    if (ctx->hasFixedSeed) return RValue_makeUndefined();
     srand((unsigned int) time(nullptr));
     return RValue_makeUndefined();
 }
