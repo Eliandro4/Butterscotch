@@ -164,6 +164,8 @@ typedef struct VMContext {
     struct { uint32_t key; uint32_t value; }* varRefMap;
     struct { uint32_t key; uint32_t value; }* funcRefMap;
     bool hasFixedSeed;
+    // Cached varID for the built-in "creator" self variable (-1 if not found)
+    int32_t creatorVarID;
     // Cross-reference map for disassembler: targetCodeIndex -> stb_ds array of callerCodeIndex
     struct { int32_t key; int32_t* value; }* crossRefMap;
 } VMContext;

@@ -1391,7 +1391,11 @@ static RValue builtinInstanceCreate(VMContext* ctx, RValue* args, int32_t argCou
         fprintf(stderr, "VM: instance_create: objectIndex %d out of range\n", objectIndex);
         return RValue_makeReal(0.0);
     }
+    Instance* callerInst = (Instance*) ctx->currentInstance;
     Instance* inst = Runner_createInstance(runner, x, y, objectIndex);
+    if (callerInst != nullptr && ctx->creatorVarID >= 0 && inst->selfVarCount > (uint32_t) ctx->creatorVarID) {
+        inst->selfVars[ctx->creatorVarID] = RValue_makeReal((double) callerInst->instanceId);
+    }
     return RValue_makeReal((double) inst->instanceId);
 }
 

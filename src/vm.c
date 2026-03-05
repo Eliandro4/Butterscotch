@@ -1737,6 +1737,15 @@ VMContext* VM_create(DataWin* dataWin) {
     ctx->localArrayMap = nullptr;
     ctx->globalArrayVarTracker = nullptr;
 
+    // Find the varID for "creator" self variable (used by instance_create)
+    ctx->creatorVarID = -1;
+    forEach(Variable, cv, dataWin->vari.variables, dataWin->vari.variableCount) {
+        if (cv->instanceType == INSTANCE_SELF && cv->varID >= 0 && strcmp(cv->name, "creator") == 0) {
+            ctx->creatorVarID = cv->varID;
+            break;
+        }
+    }
+
     // Build globalVarNameMap: varName -> varID for global variables
     ctx->globalVarNameMap = nullptr;
     forEach(Variable, v2, dataWin->vari.variables, dataWin->vari.variableCount) {
