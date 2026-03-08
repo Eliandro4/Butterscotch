@@ -2220,6 +2220,28 @@ static RValue builtin_draw_get_alpha(VMContext* ctx, [[maybe_unused]] RValue* ar
     return RValue_makeReal(0.0);
 }
 
+// merge_color(col1, col2, amount) - lerps between two colors
+static RValue builtinMergeColor([[maybe_unused]] VMContext* ctx, RValue* args, [[maybe_unused]] int32_t argCount) {
+    int32_t col1 = RValue_toInt32(args[0]);
+    int32_t col2 = RValue_toInt32(args[1]);
+    double amount = RValue_toReal(args[2]);
+
+    int32_t b1 = (col1 >> 16) & 0xFF;
+    int32_t g1 = (col1 >> 8) & 0xFF;
+    int32_t r1 = col1 & 0xFF;
+
+    int32_t b2 = (col2 >> 16) & 0xFF;
+    int32_t g2 = (col2 >> 8) & 0xFF;
+    int32_t r2 = col2 & 0xFF;
+
+    double inv = 1.0 - amount;
+    int32_t r = (int32_t) (r1 * inv + r2 * amount);
+    int32_t g = (int32_t) (g1 * inv + g2 * amount);
+    int32_t b = (int32_t) (b1 * inv + b2 * amount);
+
+    return RValue_makeReal((double) (((b << 16) & 0xFF0000) | ((g << 8) & 0xFF00) | (r & 0xFF)));
+}
+
 // Surface stubs
 STUB_RETURN_ZERO(surface_create)
 STUB_RETURN_UNDEFINED(surface_free)
@@ -3044,6 +3066,10 @@ void VMBuiltins_registerAll(void) {
     registerBuiltin("draw_get_colour", builtin_draw_get_colour);
     registerBuiltin("draw_get_color", builtin_draw_get_color);
     registerBuiltin("draw_get_alpha", builtin_draw_get_alpha);
+
+    // Color
+    registerBuiltin("merge_color", builtinMergeColor);
+    registerBuiltin("merge_colour", builtinMergeColor);
 
     // Surface
     registerBuiltin("surface_create", builtin_surface_create);
