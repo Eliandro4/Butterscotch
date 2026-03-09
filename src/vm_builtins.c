@@ -1085,6 +1085,18 @@ static RValue builtinRoomPrevious(VMContext* ctx, RValue* args, [[maybe_unused]]
     return RValue_makeReal(-1);
 }
 
+static RValue builtinRoomSetPersistent(VMContext* ctx, RValue* args, [[maybe_unused]] int32_t argCount) {
+    if (2 > argCount) return RValue_makeUndefined();
+
+    int32_t roomId = RValue_toInt32(args[0]);
+    bool persistent = RValue_toBool(args[1]);
+    // The HTML5 room_set_persistent does do this (it checks if the room is null)
+    if (0 > roomId || (uint32_t) roomId >= ctx->runner->dataWin->room.count) return RValue_makeUndefined();
+    ctx->runner->dataWin->room.rooms[roomId].persistent = persistent;
+
+    return RValue_makeUndefined();
+}
+
 // ===[ VARIABLE FUNCTIONS ]===
 
 static RValue builtinVariableGlobalExists(VMContext* ctx, RValue* args, int32_t argCount) {
@@ -2876,6 +2888,7 @@ void VMBuiltins_registerAll(void) {
     registerBuiltin("room_goto", builtinRoomGoto);
     registerBuiltin("room_next", builtinRoomNext);
     registerBuiltin("room_previous", builtinRoomPrevious);
+    registerBuiltin("room_set_persistent", builtinRoomSetPersistent);
 
     // Variables
     registerBuiltin("variable_global_exists", builtinVariableGlobalExists);
