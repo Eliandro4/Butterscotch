@@ -3,6 +3,7 @@ package com.butterscotch
 import android.app.AlertDialog
 import android.graphics.Color
 import android.os.Bundle
+import android.view.View
 import android.view.Window
 import android.view.WindowManager
 import android.widget.Button
@@ -24,6 +25,12 @@ class VirtualGamepadEditorActivity : AppCompatActivity() {
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         )
+        window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
         setContentView(R.layout.activity_editor)
 
         layoutConfig = VirtualGamepadConfig.loadLayout(this)
@@ -35,6 +42,9 @@ class VirtualGamepadEditorActivity : AppCompatActivity() {
         editorView.onButtonDoubleTapped = { btn ->
             showEditButtonDialog(btn)
         }
+        editorView.onJoystickDoubleTapped = { js ->
+            showEditJoystickDialog(js)
+        }
 
         findViewById<Button>(R.id.btnAddButton).setOnClickListener {
             layoutConfig.buttons.add(VirtualButton(
@@ -44,13 +54,11 @@ class VirtualGamepadEditorActivity : AppCompatActivity() {
             editorView.invalidate()
         }
 
-        findViewById<Button>(R.id.btnToggleJoystick).setOnClickListener {
-            layoutConfig.joystick.enabled = !layoutConfig.joystick.enabled
-            if (layoutConfig.joystick.enabled) {
-                // reset position if it was out of bounds
-                layoutConfig.joystick.x = 200f
-                layoutConfig.joystick.y = container.height - 200f
-            }
+        findViewById<Button>(R.id.btnAddJoystick).setOnClickListener {
+            layoutConfig.joysticks.add(VirtualJoystick(
+                x = container.width / 4f,
+                y = container.height - 200f
+            ))
             editorView.invalidate()
         }
 
@@ -102,6 +110,60 @@ class VirtualGamepadEditorActivity : AppCompatActivity() {
             }
             .setNeutralButton("Delete") { _, _ ->
                 layoutConfig.buttons.remove(btn)
+                editorView.invalidate()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showEditJoystickDialog(js: VirtualJoystick) {
+        val layout = LinearLayout(this)
+        layout.orientation = LinearLayout.VERTICAL
+        layout.setPadding(50, 40, 50, 10)
+
+        val radiusInput = EditText(this)
+        radiusInput.hint = "Radius"
+        radiusInput.setText(js.radius.toInt().toString())
+        radiusInput.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        layout.addView(radiusInput)
+        
+        val upInput = EditText(this)
+        upInput.hint = "Up Key (default 38)"
+        upInput.setText(js.upKey.toString())
+        upInput.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        layout.addView(upInput)
+
+        val downInput = EditText(this)
+        downInput.hint = "Down Key (default 40)"
+        downInput.setText(js.downKey.toString())
+        downInput.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        layout.addView(downInput)
+        
+        val leftInput = EditText(this)
+        leftInput.hint = "Left Key (default 37)"
+        leftInput.setText(js.leftKey.toString())
+        leftInput.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        layout.addView(leftInput)
+
+        val rightInput = EditText(this)
+        rightInput.hint = "Right Key (default 39)"
+        rightInput.setText(js.rightKey.toString())
+        rightInput.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        layout.addView(rightInput)
+
+        AlertDialog.Builder(this)
+            .setTitle("Edit Joystick")
+            .setView(layout)
+            .setPositiveButton("Save") { _, _ ->
+                js.radius = radiusInput.text.toString().toFloatOrNull() ?: js.radius
+                js.upKey = upInput.text.toString().toIntOrNull() ?: js.upKey
+                js.downKey = downInput.text.toString().toIntOrNull() ?: js.downKey
+                js.leftKey = leftInput.text.toString().toIntOrNull() ?: js.leftKey
+                js.rightKey = rightInput.text.toString().toIntOrNull() ?: js.rightKey
+                editorView.invalidate()
+            }
+            .setNeutralButton("Delete") { _, _ ->
+                layoutConfig.joysticks.remove(js)
                 editorView.invalidate()
             }
             .setNegativeButton("Cancel", null)

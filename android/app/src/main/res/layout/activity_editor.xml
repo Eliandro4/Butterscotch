@@ -1,15 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:layout_height="match_parent">
+
+    <FrameLayout
+        android:id="@+id/editorContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#111111">
+    </FrameLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:padding="8dp"
-        android:background="#333333">
+        android:background="#88000000"
+        android:layout_gravity="top">
 
         <Button
             android:id="@+id/btnAddButton"
@@ -19,10 +26,10 @@
             android:layout_marginEnd="8dp"/>
 
         <Button
-            android:id="@+id/btnToggleJoystick"
+            android:id="@+id/btnAddJoystick"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Toggle Joystick"
+            android:text="+ Joystick"
             android:layout_marginEnd="8dp"/>
 
         <View
@@ -45,10 +52,4 @@
             android:textStyle="bold"/>
     </LinearLayout>
 
-    <FrameLayout
-        android:id="@+id/editorContainer"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="#111111">
-    </FrameLayout>
-</LinearLayout>
+</FrameLayout>

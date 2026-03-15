@@ -15,16 +15,20 @@ data class VirtualButton(
 )
 
 data class VirtualJoystick(
-    var enabled: Boolean = true,
+    var id: String = java.util.UUID.randomUUID().toString(),
     var x: Float = 150f,
     var y: Float = 150f,
     var radius: Float = 100f, // Outer radius
-    var innerRadius: Float = 40f
+    var innerRadius: Float = 40f,
+    var upKey: Int = 38,
+    var downKey: Int = 40,
+    var leftKey: Int = 37,
+    var rightKey: Int = 39
 )
 
 data class VirtualGamepadLayout(
     var buttons: MutableList<VirtualButton> = mutableListOf(),
-    var joystick: VirtualJoystick = VirtualJoystick()
+    var joysticks: MutableList<VirtualJoystick> = mutableListOf()
 )
 
 object VirtualGamepadConfig {

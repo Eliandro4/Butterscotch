@@ -41,12 +41,13 @@ class VirtualGamepadEditorView(context: Context, val layoutConfig: VirtualGamepa
 
     // Dragging state
     private var draggedButton: VirtualButton? = null
-    private var draggingJoystick = false
+    private var draggedJoystick: VirtualJoystick? = null
     private var lastTouchX = 0f
     private var lastTouchY = 0f
     private var isDragging = false
 
     var onButtonDoubleTapped: ((VirtualButton) -> Unit)? = null
+    var onJoystickDoubleTapped: ((VirtualJoystick) -> Unit)? = null
 
     init {
         setWillNotDraw(false)
@@ -55,12 +56,10 @@ class VirtualGamepadEditorView(context: Context, val layoutConfig: VirtualGamepa
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // Draw Joystick
-        if (layoutConfig.joystick.enabled) {
-            val js = layoutConfig.joystick
+        // Draw Joysticks
+        for (js in layoutConfig.joysticks) {
             canvas.drawCircle(js.x, js.y, js.radius, joystickBasePaint)
             canvas.drawCircle(js.x, js.y, js.radius, buttonStrokePaint)
-            
             canvas.drawText("JOYSTICK", js.x, js.y, textPaint)
         }
 
@@ -103,13 +102,17 @@ class VirtualGamepadEditorView(context: Context, val layoutConfig: VirtualGamepa
                     return true
                 }
 
-                // Check joystick
-                if (layoutConfig.joystick.enabled) {
-                    val js = layoutConfig.joystick
-                    if (hypot((x - js.x).toDouble(), (y - js.y).toDouble()) <= js.radius) {
-                        draggingJoystick = true
-                        return true
+                // Check joysticks
+                draggedJoystick = layoutConfig.joysticks.lastOrNull { js ->
+                    hypot((x - js.x).toDouble(), (y - js.y).toDouble()) <= js.radius
+                }
+
+                if (draggedJoystick != null) {
+                    if (isDoubleClick) {
+                        onJoystickDoubleTapped?.invoke(draggedJoystick!!)
+                        draggedJoystick = null
                     }
+                    return true
                 }
             }
             MotionEvent.ACTION_MOVE -> {
@@ -127,9 +130,9 @@ class VirtualGamepadEditorView(context: Context, val layoutConfig: VirtualGamepa
                     lastTouchY = y
                     invalidate()
                     return true
-                } else if (draggingJoystick) {
-                    layoutConfig.joystick.x += dx
-                    layoutConfig.joystick.y += dy
+                } else if (draggedJoystick != null) {
+                    draggedJoystick!!.x += dx
+                    draggedJoystick!!.y += dy
                     lastTouchX = x
                     lastTouchY = y
                     invalidate()
@@ -138,7 +141,7 @@ class VirtualGamepadEditorView(context: Context, val layoutConfig: VirtualGamepa
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 draggedButton = null
-                draggingJoystick = false
+                draggedJoystick = null
                 return true
             }
         }

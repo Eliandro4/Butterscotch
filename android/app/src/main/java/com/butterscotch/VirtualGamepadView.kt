@@ -47,48 +47,62 @@ class VirtualGamepadView(context: Context) : View(context) {
         isAntiAlias = true
     }
 
-    // Tracking active pointers
-    private val activePointers = mutableMapOf<Int, PointerState>()
-    private var joystickPointerId: Int? = null
-    
-    // Joystick state
-    private var jsNubX = layoutConfig.joystick.x
-    private var jsNubY = layoutConfig.joystick.y
-    private var isJsActive = false
-
-    private val activeKeys = mutableSetOf<Int>()
-
     data class PointerState(var x: Float, var y: Float, var buttonPressed: VirtualButton?)
+    private val activePointers = mutableMapOf<Int, PointerState>()
+
+    class JoystickState(val js: VirtualJoystick) {
+        var pointerId: Int? = null
+        var nubX: Float = js.x
+        var nubY: Float = js.y
+        val activeKeys = mutableSetOf<Int>()
+
+        fun reset() {
+            pointerId = null
+            nubX = js.x
+            nubY = js.y
+        }
+    }
+
+    private val joystickStates = mutableMapOf<VirtualJoystick, JoystickState>()
 
     init {
-        // Necessary if drawing
         setWillNotDraw(false)
+        initJoystickStates()
+    }
+
+    private fun initJoystickStates() {
+        for (jsState in joystickStates.values) {
+            for (key in jsState.activeKeys) {
+                sendKey(key, false)
+            }
+        }
+        joystickStates.clear()
+        for (js in layoutConfig.joysticks) {
+            joystickStates[js] = JoystickState(js)
+        }
     }
 
     fun reloadConfig() {
         val newLayout = VirtualGamepadConfig.loadLayout(context)
         layoutConfig.buttons.clear()
         layoutConfig.buttons.addAll(newLayout.buttons)
-        layoutConfig.joystick = newLayout.joystick
-        
-        jsNubX = layoutConfig.joystick.x
-        jsNubY = layoutConfig.joystick.y
+        layoutConfig.joysticks.clear()
+        layoutConfig.joysticks.addAll(newLayout.joysticks)
+        initJoystickStates()
         invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // Draw Joystick
-        if (layoutConfig.joystick.enabled) {
-            val js = layoutConfig.joystick
-            canvas.drawCircle(js.x, js.y, js.radius, joystickBasePaint)
-            // Stroke
-            canvas.drawCircle(js.x, js.y, js.radius, buttonStrokePaint)
-            // Nub
-            val nx = if (isJsActive) jsNubX else js.x
-            val ny = if (isJsActive) jsNubY else js.y
-            canvas.drawCircle(nx, ny, js.innerRadius, joystickNubPaint)
+        // Draw Joysticks
+        for (js in layoutConfig.joysticks) {
+            val state = joystickStates[js]
+            if (state != null) {
+                canvas.drawCircle(js.x, js.y, js.radius, joystickBasePaint)
+                canvas.drawCircle(js.x, js.y, js.radius, buttonStrokePaint)
+                canvas.drawCircle(state.nubX, state.nubY, js.innerRadius, joystickNubPaint)
+            }
         }
 
         // Draw Buttons
@@ -142,16 +156,17 @@ class VirtualGamepadView(context: Context) : View(context) {
     }
 
     private fun handlePointerDown(pointerId: Int, x: Float, y: Float) {
-        // Check joystick first
-        if (layoutConfig.joystick.enabled && joystickPointerId == null) {
-            val js = layoutConfig.joystick
-            val dist = hypot((x - js.x).toDouble(), (y - js.y).toDouble()).toFloat()
-            if (dist <= js.radius * 1.5f) { // slightly larger hit box
-                joystickPointerId = pointerId
-                isJsActive = true
-                updateJoystickInput(x, y)
-                activePointers[pointerId] = PointerState(x, y, null)
-                return
+        // Check joysticks first
+        for (js in layoutConfig.joysticks) {
+            val state = joystickStates[js] ?: continue
+            if (state.pointerId == null) {
+                val dist = hypot((x - js.x).toDouble(), (y - js.y).toDouble()).toFloat()
+                if (dist <= js.radius * 1.5f) { // slightly larger hit box
+                    state.pointerId = pointerId
+                    updateJoystickInput(state, x, y)
+                    activePointers[pointerId] = PointerState(x, y, null)
+                    return
+                }
             }
         }
 
@@ -176,30 +191,26 @@ class VirtualGamepadView(context: Context) : View(context) {
         state.x = x
         state.y = y
 
-        if (joystickPointerId == pointerId) {
-            updateJoystickInput(x, y)
-            return
+        for (jsState in joystickStates.values) {
+            if (jsState.pointerId == pointerId) {
+                updateJoystickInput(jsState, x, y)
+                return
+            }
         }
-
-        // Moving over buttons? For simplicity, we only trigger button if pressed down on it initially.
-        // Optional: Implement sliding across buttons.
     }
 
     private fun handlePointerUp(pointerId: Int) {
         val state = activePointers.remove(pointerId)
         
-        if (joystickPointerId == pointerId) {
-            joystickPointerId = null
-            isJsActive = false
-            jsNubX = layoutConfig.joystick.x
-            jsNubY = layoutConfig.joystick.y
-            
-            // Release all arrow keys
-            releaseJsKey(37) // Left
-            releaseJsKey(38) // Up
-            releaseJsKey(39) // Right
-            releaseJsKey(40) // Down
-            return
+        for (jsState in joystickStates.values) {
+            if (jsState.pointerId == pointerId) {
+                for (key in jsState.activeKeys) {
+                    sendKey(key, false)
+                }
+                jsState.activeKeys.clear()
+                jsState.reset()
+                return
+            }
         }
 
         if (state?.buttonPressed != null) {
@@ -207,22 +218,22 @@ class VirtualGamepadView(context: Context) : View(context) {
         }
     }
 
-    private fun updateJoystickInput(px: Float, py: Float) {
-        val js = layoutConfig.joystick
+    private fun updateJoystickInput(state: JoystickState, px: Float, py: Float) {
+        val js = state.js
         val dx = px - js.x
         val dy = py - js.y
         val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
         
         if (dist <= js.radius) {
-            jsNubX = px
-            jsNubY = py
+            state.nubX = px
+            state.nubY = py
         } else {
             val angle = atan2(dy.toDouble(), dx.toDouble())
-            jsNubX = js.x + (cos(angle) * js.radius).toFloat()
-            jsNubY = js.y + (sin(angle) * js.radius).toFloat()
+            state.nubX = js.x + (cos(angle) * js.radius).toFloat()
+            state.nubY = js.y + (sin(angle) * js.radius).toFloat()
         }
 
-        // Convert offset to 8-way directional keys
+        // Convert offset to 4-way keys (diagonals will trigger 2 keys)
         val deadZone = js.radius * 0.3f
         
         val isLeft = dx < -deadZone
@@ -230,30 +241,23 @@ class VirtualGamepadView(context: Context) : View(context) {
         val isUp = dy < -deadZone
         val isDown = dy > deadZone
 
-        updateJsKey(37, isLeft)   // Left
-        updateJsKey(39, isRight)  // Right
-        updateJsKey(38, isUp)     // Up
-        updateJsKey(40, isDown)   // Down
+        updateJsKey(state, js.leftKey, isLeft)
+        updateJsKey(state, js.rightKey, isRight)
+        updateJsKey(state, js.upKey, isUp)
+        updateJsKey(state, js.downKey, isDown)
     }
 
-    private fun updateJsKey(keyCode: Int, pressed: Boolean) {
+    private fun updateJsKey(state: JoystickState, keyCode: Int, pressed: Boolean) {
         if (pressed) {
-            if (!activeKeys.contains(keyCode)) {
+            if (!state.activeKeys.contains(keyCode)) {
                 sendKey(keyCode, true)
-                activeKeys.add(keyCode)
+                state.activeKeys.add(keyCode)
             }
         } else {
-            if (activeKeys.contains(keyCode)) {
+            if (state.activeKeys.contains(keyCode)) {
                 sendKey(keyCode, false)
-                activeKeys.remove(keyCode)
+                state.activeKeys.remove(keyCode)
             }
-        }
-    }
-    
-    private fun releaseJsKey(keyCode: Int) {
-        if (activeKeys.contains(keyCode)) {
-            sendKey(keyCode, false)
-            activeKeys.remove(keyCode)
         }
     }
 
