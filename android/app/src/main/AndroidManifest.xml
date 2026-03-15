@@ -28,6 +28,7 @@
 
         <activity android:name=".GameActivity"
             android:exported="false"
+            android:screenOrientation="landscape"
             android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|smallestScreenSize|uiMode"
             android:theme="@style/Theme.Butterscotch.Fullscreen" />
     </application>
