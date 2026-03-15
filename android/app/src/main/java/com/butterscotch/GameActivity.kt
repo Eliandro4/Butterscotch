@@ -81,7 +81,7 @@ class GameActivity : Activity() {
             KeyEvent.KEYCODE_SPACE -> 32      // VK_SPACE
             KeyEvent.KEYCODE_ENTER -> 13      // VK_ENTER
             KeyEvent.KEYCODE_ESCAPE -> 27     // VK_ESCAPE
-            KeyEvent.KEYCODE_DEL -> 8         // VK_BACKSPACE
+            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DEL -> 8         // VK_BACKSPACE
             KeyEvent.KEYCODE_TAB -> 9         // VK_TAB
             KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT -> 16 // VK_SHIFT
             KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_CTRL_RIGHT -> 17   // VK_CONTROL
@@ -118,6 +118,7 @@ class ButterscotchGLSurfaceView(
     init {
         // Use OpenGL ES 3.0
         setEGLContextClientVersion(3)
+        preserveEGLContextOnPause = true
 
         renderer = ButterscotchRenderer(dataPath, debugMode, headlessMode)
         setRenderer(renderer)
