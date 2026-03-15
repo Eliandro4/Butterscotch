@@ -39,6 +39,9 @@ typedef struct {
     uint32_t originalTexturePageCount;
     uint32_t originalTpagCount;
     uint32_t originalSpriteCount;
+    // Rendering layout (calculated in beginFrame for blitting to window)
+    int32_t renderW, renderH;
+    int32_t renderOffsetX, renderOffsetY;
 } GLRenderer;
 
 Renderer* GLRenderer_create(void);

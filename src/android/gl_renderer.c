@@ -271,6 +271,24 @@ static void glBeginFrame(Renderer* renderer, int32_t gameW, int32_t gameH, int32
         fprintf(stderr, "GL: FBO resized to %dx%d\n", gameW, gameH);
     }
 
+    // Calculate aspect ratio scaling for the final blit
+    float gameAspect = (float) gameW / (float) gameH;
+    float windowAspect = (float) windowW / (float) windowH;
+
+    if (windowAspect > gameAspect) {
+        // Window is wider than game: pillarbox
+        gl->renderH = windowH;
+        gl->renderW = (int32_t) ((float) windowH * gameAspect);
+        gl->renderOffsetX = (windowW - gl->renderW) / 2;
+        gl->renderOffsetY = 0;
+    } else {
+        // Window is taller than game (or same): letterbox
+        gl->renderW = windowW;
+        gl->renderH = (int32_t) ((float) windowW / gameAspect);
+        gl->renderOffsetX = 0;
+        gl->renderOffsetY = (windowH - gl->renderH) / 2;
+    }
+
     // Bind FBO and clear
     glBindFramebuffer(GL_FRAMEBUFFER, gl->fbo);
     glViewport(0, 0, gameW, gameH);
@@ -329,10 +347,17 @@ static void glEndFrame(Renderer* renderer) {
     GLRenderer* gl = (GLRenderer*) renderer;
     glBindVertexArray(0);
 
-    // Blit the full game-resolution FBO to the window
+    // Reset state for blitting to default framebuffer
+    glDisable(GL_SCISSOR_TEST);
+    glViewport(0, 0, gl->windowW, gl->windowH);
+
+    // Blit the full game-resolution FBO to the window with aspect ratio correction
     glBindFramebuffer(GL_READ_FRAMEBUFFER, gl->fbo);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-    glBlitFramebuffer(0, 0, gl->fboWidth, gl->fboHeight, 0, 0, gl->windowW, gl->windowH, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBlitFramebuffer(0, 0, gl->fboWidth, gl->fboHeight, 
+                      gl->renderOffsetX, gl->renderOffsetY, 
+                      gl->renderOffsetX + gl->renderW, gl->renderOffsetY + gl->renderH, 
+                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 

@@ -11,6 +11,7 @@
 #include "runner.h"
 #include "runner_keyboard.h"
 #include "gl_renderer.h"
+#include "android/gl_renderer.h"
 
 // VK_LBUTTON is the Windows VK code for left mouse button (1)
 // Defined here since this isn't a Windows build
@@ -26,6 +27,8 @@ static DataWin* globalDataWin = NULL;
 static VMContext* globalVm = NULL;
 static Runner* globalRunner = NULL;
 static Renderer* globalRenderer = NULL;
+static int32_t s_windowWidth = 0;
+static int32_t s_windowHeight = 0;
 
 JNIEXPORT void JNICALL
 Java_com_butterscotch_ButterscotchNative_nativeInit(JNIEnv *env, jobject thiz, jstring dataPathStr, jboolean debugMode, jboolean headlessMode) {
@@ -88,7 +91,8 @@ Java_com_butterscotch_ButterscotchNative_nativeInit(JNIEnv *env, jobject thiz, j
 
 JNIEXPORT void JNICALL
 Java_com_butterscotch_ButterscotchNative_nativeResize(JNIEnv *env, jobject thiz, jint width, jint height) {
-    // We could store the width/height to be passed to renderer beginFrame
+    s_windowWidth = width;
+    s_windowHeight = height;
     LOGI("Resized to %d x %d", width, height);
 }
 
@@ -122,12 +126,12 @@ Java_com_butterscotch_ButterscotchNative_nativeStep(JNIEnv *env, jobject thiz) {
 
     Room* activeRoom = globalRunner->currentRoom;
 
-    // We fetch current framebuffer sizes. In Android GLES, it's bound.
-    GLint viewport[4];
-    glGetIntegerv(GL_VIEWPORT, viewport);
-    int fbWidth = viewport[2];
-    int fbHeight = viewport[3];
+    // Use stored window dimensions
+    int fbWidth = s_windowWidth;
+    int fbHeight = s_windowHeight;
 
+    // Safety: ensure no clipping when clearing or blitting to default framebuffer
+    glDisable(GL_SCISSOR_TEST);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -190,13 +194,24 @@ Java_com_butterscotch_ButterscotchNative_nativeStep(JNIEnv *env, jobject thiz) {
 
 JNIEXPORT void JNICALL
 Java_com_butterscotch_ButterscotchNative_nativeTouch(JNIEnv *env, jobject thiz, jint pointerId, jfloat x, jfloat y, jint action) {
-    if (!globalRunner || !globalRunner->keyboard) return;
+    if (!globalRunner || !globalRunner->keyboard || !globalRenderer) return;
 
-    // Simulate mouse click on touch. Just a basic implementation.
+    // Map screen coordinates to game space
+    GLRenderer* gl = (GLRenderer*) globalRenderer;
+    
+    // Map from window space [0, s_windowWidth] to game space [0, gameW]
+    // Using s_windowWidth/Height as source and gl->renderOffsetX/W as source-inside-window
+    float mappedX = (x - (float) gl->renderOffsetX) * ((float) gl->gameW / (float) gl->renderW);
+    float mappedY = (y - (float) gl->renderOffsetY) * ((float) gl->gameH / (float) gl->renderH);
+
+    // Update global mouse positions
+    globalRunner->mouseX = (double) mappedX;
+    globalRunner->mouseY = (double) mappedY;
+
+    // Simulate mouse click on touch.
     // 0 = DOWN, 1 = MOVE, 2 = UP
     if (action == 0) {
         RunnerKeyboard_onKeyDown(globalRunner->keyboard, VK_LBUTTON);
-        // Maybe update mouse positions? This is engine-dependent on how the variables are handled
     } else if (action == 2) {
         RunnerKeyboard_onKeyUp(globalRunner->keyboard, VK_LBUTTON);
     }

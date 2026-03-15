@@ -354,6 +354,8 @@ RValue VMBuiltins_getVariable(VMContext* ctx, const char* name, int32_t arrayInd
     if (runner != nullptr) {
         if (strcmp(name, "keyboard_key") == 0) return RValue_makeReal((double) runner->keyboard->lastKey);
         if (strcmp(name, "keyboard_lastkey") == 0) return RValue_makeReal((double) runner->keyboard->lastKey);
+        if (strcmp(name, "mouse_x") == 0) return RValue_makeReal(runner->mouseX);
+        if (strcmp(name, "mouse_y") == 0) return RValue_makeReal(runner->mouseY);
     }
 
     // Surfaces
@@ -439,6 +441,14 @@ void VMBuiltins_setVariable(VMContext* ctx, const char* name, RValue val, int32_
     }
     if (strcmp(name, "keyboard_lastkey") == 0) {
         runner->keyboard->lastKey = RValue_toInt32(val);
+        return;
+    }
+    if (strcmp(name, "mouse_x") == 0) {
+        runner->mouseX = RValue_toReal(val);
+        return;
+    }
+    if (strcmp(name, "mouse_y") == 0) {
+        runner->mouseY = RValue_toReal(val);
         return;
     }
 

@@ -99,6 +99,7 @@ typedef struct Runner {
     SavedRoomState* savedRoomStates; // array of size dataWin->room.count, for persistent room support
     float viewAngles[8]; // runtime-only view_angle per view (not stored in data.win)
     int32_t viewCurrent; // index of the view currently being drawn (for view_current)
+    double mouseX, mouseY; // current mouse/touch coordinates in game space
 } Runner;
 
 const char* Runner_getEventName(int32_t eventType, int32_t eventSubtype);
