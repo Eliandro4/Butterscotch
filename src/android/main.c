@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <time.h>
 #include "data_win.h"
 #include "vm.h"
 #include "runner.h"
@@ -29,6 +30,7 @@ static Runner* globalRunner = NULL;
 static Renderer* globalRenderer = NULL;
 static int32_t s_windowWidth = 0;
 static int32_t s_windowHeight = 0;
+static struct timespec s_lastFrameTime = {0, 0};
 
 JNIEXPORT void JNICALL
 Java_com_butterscotch_ButterscotchNative_nativeInit(JNIEnv *env, jobject thiz, jstring dataPathStr, jboolean debugMode, jboolean headlessMode) {
@@ -116,7 +118,46 @@ Java_com_butterscotch_ButterscotchNative_nativeStep(JNIEnv *env, jobject thiz) {
             DataWin_free(globalDataWin);
             globalDataWin = NULL;
         }
+        s_lastFrameTime.tv_sec = 0;
+        s_lastFrameTime.tv_nsec = 0;
         return JNI_FALSE;
+    }
+
+    // Limit frame rate to room speed
+    if (globalRunner->currentRoom->speed > 0) {
+        double targetFrameTime = 1.0 / (double) globalRunner->currentRoom->speed;
+        
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+
+        if (s_lastFrameTime.tv_sec == 0) {
+            s_lastFrameTime = now;
+        } else {
+            double elapsed = (double) (now.tv_sec - s_lastFrameTime.tv_sec) + 
+                            (double) (now.tv_nsec - s_lastFrameTime.tv_nsec) / 1e9;
+            
+            double remaining = targetFrameTime - elapsed;
+            if (remaining > 0) {
+                // Sleep for most of the remaining time
+                if (remaining > 0.002) {
+                    struct timespec ts;
+                    ts.tv_sec = (time_t) (remaining - 0.001);
+                    ts.tv_nsec = (long) ((remaining - 0.001 - (double) ts.tv_sec) * 1e9);
+                    nanosleep(&ts, NULL);
+                }
+                
+                // Spin-wait for precision
+                while (1) {
+                    clock_gettime(CLOCK_MONOTONIC, &now);
+                    elapsed = (double) (now.tv_sec - s_lastFrameTime.tv_sec) + 
+                             (double) (now.tv_nsec - s_lastFrameTime.tv_nsec) / 1e9;
+                    if (elapsed >= targetFrameTime) break;
+                }
+            }
+            s_lastFrameTime = now;
+        }
+    } else {
+        clock_gettime(CLOCK_MONOTONIC, &s_lastFrameTime);
     }
 
     RunnerKeyboard_beginFrame(globalRunner->keyboard);

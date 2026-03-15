@@ -21,19 +21,84 @@ void RunnerKeyboard_free(RunnerKeyboardState* kb) {
 void RunnerKeyboard_beginFrame(RunnerKeyboardState* kb) {
     memset(kb->keyPressed, 0, sizeof(kb->keyPressed));
     memset(kb->keyReleased, 0, sizeof(kb->keyReleased));
+
+#ifndef __STDC_NO_ATOMICS__
+    uint32_t head = atomic_load_explicit(&kb->eventHead, memory_order_relaxed);
+    uint32_t tail = atomic_load_explicit(&kb->eventTail, memory_order_acquire);
+#else
+    uint32_t head = kb->eventHead;
+    uint32_t tail = kb->eventTail;
+#endif
+
+    while (head != tail) {
+        int32_t key = kb->eventQueue[head].keyCode;
+        bool down = kb->eventQueue[head].down;
+
+        if (down) {
+            kb->keyDown[key] = true;
+            kb->keyPressed[key] = true;
+            kb->lastKey = key;
+        } else {
+            kb->keyDown[key] = false;
+            kb->keyReleased[key] = true;
+        }
+
+        head = (head + 1) % 128;
+    }
+
+#ifndef __STDC_NO_ATOMICS__
+    atomic_store_explicit(&kb->eventHead, head, memory_order_release);
+#else
+    kb->eventHead = head;
+#endif
 }
 
 void RunnerKeyboard_onKeyDown(RunnerKeyboardState* kb, int32_t gmlKeyCode) {
     if (!isValidKey(gmlKeyCode)) return;
-    kb->keyDown[gmlKeyCode] = true;
-    kb->keyPressed[gmlKeyCode] = true;
-    kb->lastKey = gmlKeyCode;
+
+#ifndef __STDC_NO_ATOMICS__
+    uint32_t tail = atomic_load_explicit(&kb->eventTail, memory_order_relaxed);
+    uint32_t head = atomic_load_explicit(&kb->eventHead, memory_order_acquire);
+#else
+    uint32_t tail = kb->eventTail;
+    uint32_t head = kb->eventHead;
+#endif
+
+    uint32_t nextTail = (tail + 1) % 128;
+    if (nextTail != head) {
+        kb->eventQueue[tail].keyCode = gmlKeyCode;
+        kb->eventQueue[tail].down = true;
+
+#ifndef __STDC_NO_ATOMICS__
+        atomic_store_explicit(&kb->eventTail, nextTail, memory_order_release);
+#else
+        kb->eventTail = nextTail;
+#endif
+    }
 }
 
 void RunnerKeyboard_onKeyUp(RunnerKeyboardState* kb, int32_t gmlKeyCode) {
     if (!isValidKey(gmlKeyCode)) return;
-    kb->keyDown[gmlKeyCode] = false;
-    kb->keyReleased[gmlKeyCode] = true;
+
+#ifndef __STDC_NO_ATOMICS__
+    uint32_t tail = atomic_load_explicit(&kb->eventTail, memory_order_relaxed);
+    uint32_t head = atomic_load_explicit(&kb->eventHead, memory_order_acquire);
+#else
+    uint32_t tail = kb->eventTail;
+    uint32_t head = kb->eventHead;
+#endif
+
+    uint32_t nextTail = (tail + 1) % 128;
+    if (nextTail != head) {
+        kb->eventQueue[tail].keyCode = gmlKeyCode;
+        kb->eventQueue[tail].down = false;
+
+#ifndef __STDC_NO_ATOMICS__
+        atomic_store_explicit(&kb->eventTail, nextTail, memory_order_release);
+#else
+        kb->eventTail = nextTail;
+#endif
+    }
 }
 
 bool RunnerKeyboard_check(RunnerKeyboardState* kb, int32_t gmlKeyCode) {
@@ -106,6 +171,11 @@ void RunnerKeyboard_clear(RunnerKeyboardState* kb, int32_t gmlKeyCode) {
         memset(kb->keyPressed, 0, sizeof(kb->keyPressed));
         memset(kb->keyReleased, 0, sizeof(kb->keyReleased));
         kb->lastKey = VK_NOKEY;
+#ifndef __STDC_NO_ATOMICS__
+        atomic_store_explicit(&kb->eventHead, atomic_load_explicit(&kb->eventTail, memory_order_relaxed), memory_order_release);
+#else
+        kb->eventHead = kb->eventTail;
+#endif
         return;
     }
     if (!isValidKey(gmlKeyCode)) return;

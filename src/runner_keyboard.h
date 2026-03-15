@@ -3,6 +3,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifndef __STDC_NO_ATOMICS__
+#include <stdatomic.h>
+#endif
+
 // GML uses key codes 0-255 (vk_nokey=0, vk_anykey=1, ASCII codes, etc.)
 #define GML_KEY_COUNT 256
 
@@ -41,11 +45,25 @@
 #define VK_F11     122
 #define VK_F12     123
 
+typedef struct RunnerKeyboardEvent {
+    int32_t keyCode;
+    bool down;
+} RunnerKeyboardEvent;
+
 typedef struct RunnerKeyboardState {
     bool keyDown[GML_KEY_COUNT];     // Currently held
     bool keyPressed[GML_KEY_COUNT];  // Just pressed this frame
     bool keyReleased[GML_KEY_COUNT]; // Just released this frame
     int32_t lastKey;                 // Last key pressed (for keyboard_key variable)
+
+    RunnerKeyboardEvent eventQueue[128];
+#ifndef __STDC_NO_ATOMICS__
+    _Atomic uint32_t eventHead;
+    _Atomic uint32_t eventTail;
+#else
+    volatile uint32_t eventHead;
+    volatile uint32_t eventTail;
+#endif
 } RunnerKeyboardState;
 
 // Lifecycle
