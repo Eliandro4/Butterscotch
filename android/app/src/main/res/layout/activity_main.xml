@@ -50,6 +50,13 @@
         android:text="LAUNCH GAME"
         android:textStyle="bold"
         android:textSize="18sp"
-        android:enabled="false"/>
+        android:enabled="false"
+        android:layout_marginBottom="16dp"/>
+
+    <Button
+        android:id="@+id/btnEditGamepad"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Edit Gamepad Layout" />
 
 </LinearLayout>

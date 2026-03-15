@@ -19,6 +19,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var switchDebug: Switch
     private lateinit var switchHeadless: Switch
     private lateinit var btnLaunch: Button
+    private lateinit var btnEditGamepad: Button
 
     private var selectedFilePath: String? = null
 
@@ -35,6 +36,7 @@ class MainActivity : AppCompatActivity() {
         switchDebug = findViewById(R.id.switchDebug)
         switchHeadless = findViewById(R.id.switchHeadless)
         btnLaunch = findViewById(R.id.btnLaunch)
+        btnEditGamepad = findViewById(R.id.btnEditGamepad)
 
         btnSelectFile.setOnClickListener {
             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -53,6 +55,11 @@ class MainActivity : AppCompatActivity() {
                 }
                 startActivity(intent)
             }
+        }
+
+        btnEditGamepad.setOnClickListener {
+            val intent = Intent(this, VirtualGamepadEditorActivity::class.java)
+            startActivity(intent)
         }
     }
 

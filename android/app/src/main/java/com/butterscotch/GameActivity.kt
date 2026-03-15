@@ -34,7 +34,14 @@ class GameActivity : Activity() {
         val headlessMode = intent.getBooleanExtra("HEADLESS_MODE", false)
 
         glSurfaceView = ButterscotchGLSurfaceView(this, gameDataPath, debugMode, headlessMode)
-        setContentView(glSurfaceView)
+        
+        val container = android.widget.FrameLayout(this)
+        container.addView(glSurfaceView)
+        
+        val gamepadView = VirtualGamepadView(this)
+        container.addView(gamepadView)
+        
+        setContentView(container)
     }
 
     override fun onResume() {
