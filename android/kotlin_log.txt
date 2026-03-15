@@ -1,0 +1,108 @@
+
+> Configure project :app
+WARNING: [CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+[CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+WARNING: [CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+[CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+WARNING: [CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+[CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+WARNING: [CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+[CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+WARNING: [CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+[CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+WARNING: [CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+[CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+WARNING: [CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+[CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+WARNING: [CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+[CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+WARNING: [CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+[CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+WARNING: [CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+[CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+WARNING: [CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+[CXX5106] NDK was located by using ndk.dir property. This method is deprecated and will be removed in a future release. Please delete ndk.dir from local.properties and set android.ndkVersion to [26.1.10909125] in all native modules in the project. https://developer.android.com/r/studio-ui/ndk-dir
+
+> Task :app:checkKotlinGradlePluginConfigurationErrors
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:dataBindingMergeDependencyArtifactsDebug UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:dataBindingGenBaseClassesDebug UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+
+> Task :app:compileDebugKotlin FAILED
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:17:22 Expecting member declaration
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:17:35 Expecting member declaration
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:17:37 Expecting member declaration
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:18:22 Expecting member declaration
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:18:36 Expecting member declaration
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:18:38 Expecting member declaration
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:19:22 Expecting member declaration
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:19:33 Expecting member declaration
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:19:35 Expecting member declaration
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:20:22 Expecting member declaration
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:20:36 Expecting member declaration
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:20:38 Expecting member declaration
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:21:22 Expecting member declaration
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:21:31 Expecting member declaration
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:21:33 Expecting member declaration
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:33:9 Unresolved reference: btnSelectFile
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:33:25 Not enough information to infer type variable T
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:34:9 Unresolved reference: tvSelectedFile
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:34:26 Not enough information to infer type variable T
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:35:9 Unresolved reference: switchDebug
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:35:23 Not enough information to infer type variable T
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:36:9 Unresolved reference: switchHeadless
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:36:26 Not enough information to infer type variable T
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:37:9 Unresolved reference: btnLaunch
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:37:21 Not enough information to infer type variable T
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:39:9 Unresolved reference: btnSelectFile
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:47:9 Unresolved reference: btnLaunch
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:51:44 Unresolved reference: switchDebug
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:52:47 Unresolved reference: switchHeadless
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:63:17 Unresolved reference: tvSelectedFile
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:63:32 Variable expected
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:64:17 Unresolved reference: btnLaunch
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:64:27 Variable expected
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:71:29 Unresolved reference: tvSelectedFile
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:71:44 Variable expected
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:72:29 Unresolved reference: btnLaunch
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:72:39 Variable expected
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:74:29 Unresolved reference: tvSelectedFile
+e: file:///mnt/Letz/Documentos/Github/Butterscotch/android/app/src/main/java/com/butterscotch/MainActivity.kt:74:44 Variable expected
+
+[Incubating] Problems report is available at: file:///mnt/Letz/Documentos/Github/Butterscotch/android/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 3s
+16 actionable tasks: 2 executed, 14 up-to-date

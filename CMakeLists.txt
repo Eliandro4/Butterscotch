@@ -15,7 +15,12 @@ file(GLOB SOURCES src/*.c)
 # Platform specific files builds
 file(GLOB PLATFORM_SOURCES src/${PLATFORM}/*.c)
 
-add_executable(butterscotch ${SOURCES} ${PLATFORM_SOURCES})
+if(PLATFORM STREQUAL "android")
+    # Build a shared library for Android
+    add_library(butterscotch SHARED ${SOURCES} ${PLATFORM_SOURCES})
+else()
+    add_executable(butterscotch ${SOURCES} ${PLATFORM_SOURCES})
+endif()
 target_include_directories(butterscotch PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 # stb_ds
@@ -72,6 +77,30 @@ elseif(PLATFORM STREQUAL "ps2")
                 ${CMAKE_SOURCE_DIR}/ps2dev-headers/newlib-include
                 ${CMAKE_SOURCE_DIR}/ps2dev-headers/gcc-include
         )
+    endif()
+elseif(PLATFORM STREQUAL "android")
+    # stb_image
+    target_include_directories(butterscotch PUBLIC vendor/stb/image)
+    
+    find_library(log-lib log)
+    find_library(android-lib android)
+    find_library(egl-lib EGL)
+    find_library(gles3-lib GLESv3)
+
+    target_link_libraries(butterscotch
+            ${log-lib}
+            ${android-lib}
+            ${egl-lib}
+            ${gles3-lib}
+            m
+    )
+    
+    # Enable useful things to figure out when things have gone wrong related to memory corruption
+    # (Also set -DCMAKE_BUILD_TYPE=Debug to get debug symbols!)
+    set(ENABLE_ASAN OFF CACHE BOOL "Enable AddressSanitizer")
+    if(ENABLE_ASAN)
+        target_compile_options(butterscotch PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+        target_link_options(butterscotch PRIVATE -fsanitize=address)
     endif()
 else()
     message(FATAL_ERROR "Unknown platform! ${PLATFORM}")
