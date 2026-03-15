@@ -201,3 +201,14 @@ Java_com_butterscotch_ButterscotchNative_nativeTouch(JNIEnv *env, jobject thiz, 
         RunnerKeyboard_onKeyUp(globalRunner->keyboard, VK_LBUTTON);
     }
 }
+
+JNIEXPORT void JNICALL
+Java_com_butterscotch_ButterscotchNative_nativeKey(JNIEnv *env, jobject thiz, jint keyCode, jboolean down) {
+    if (!globalRunner || !globalRunner->keyboard) return;
+
+    if (down) {
+        RunnerKeyboard_onKeyDown(globalRunner->keyboard, keyCode);
+    } else {
+        RunnerKeyboard_onKeyUp(globalRunner->keyboard, keyCode);
+    }
+}
