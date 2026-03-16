@@ -11,6 +11,8 @@ Ever since I created Droidtale 10+ years ago, I had that lingering thought in my
 
 And that's where Butterscotch comes in! Butterscotch is an open source re-implementation of GameMaker: Studio's runner.
 
+**Butterscotch PlayStation 2 ISO Generator:** https://butterscotch.mrpowergamerbr.com/
+
 ## Game Compatibility
 
 Butterscotch's goal is to be able to have Undertale v1.08 (GameMaker: Studio 1.4.1804, Bytecode Version 16) fully playable. But we do want to support more GameMaker: Studio games in the future too!
@@ -21,6 +23,24 @@ Of course, there are exceptions that break game compatibility altogether:
 
 * Games compiled with YYC, because they use native code instead of bytecode. 
 * Games compiled with the new [GMRT](https://github.com/YoYoGames/GMRT-Beta/tree/main), because they use native code instead of bytecode.
+
+## Supported Platforms
+
+* Linux (GLFW, OpenGL)
+* PlayStation 2 (ps2sdk, gsKit)
+* ...and maybe more in the future!
+
+## Building Butterscotch
+
+```bash
+mkdir build && cd build
+cmake -DPLATFORM=glfw -DCMAKE_BUILD_TYPE=Debug ..
+make
+```
+
+If you are using CLion, set the platform in `Settings` > `Build, Execution, Deployment` > `CMake` and add `-DPLATFORM=glfw`
+
+Then run Butterscotch with `./butterscotch /path/to/data.win`!
 
 ## CLI parameters
 
@@ -79,15 +99,26 @@ Having a transpiler also have other disadvantages:
 1. You lose the ability of debugging the runner at a "high level" by tracing opcodes.
 2. Compilation is SLOW, transpiling Undertale in a naive way to C and building it takes 90 seconds on a modern computer, and building it to other targets is so slow that I wasn't even able to test it.
 
-## Porting
+## Screenshots
 
-Butterscotch requires a C23 compiler.
+### Undertale (GLFW)
 
-## Building Butterscotch
+<img width="160" height="120" alt="Image" src="https://github.com/user-attachments/assets/6651cc2e-0d6d-4354-b98d-081e84a981df" />
+<img width="160" height="120" alt="Image" src="https://github.com/user-attachments/assets/1d6edc51-2829-4f8f-b900-393f21a6655b" />
+<img width="160" height="120" alt="Image" src="https://github.com/user-attachments/assets/0d41f16c-7ee5-47de-a2e8-5831cdcd2745" />
+<img width="160" height="120" alt="Image" src="https://github.com/user-attachments/assets/45dc47fb-6d8a-44d4-8cbb-2e5791100144" />
+<img width="160" height="120" alt="Image" src="https://github.com/user-attachments/assets/7db1c869-e625-4558-9119-0f23da0f020c" />
+<img width="160" height="120" alt="Image" src="https://github.com/user-attachments/assets/71fc7616-d580-48fe-aa6d-1e6ceea41bdb" />
+<img width="160" height="120" alt="Image" src="https://github.com/user-attachments/assets/4098936e-a1b9-4971-901d-702ec390afa7" />
+<img width="160" height="120" alt="Image" src="https://github.com/user-attachments/assets/dd3dcce3-3d78-452f-9af0-27133497650c" />
+<img width="160" height="120" alt="Image" src="https://github.com/user-attachments/assets/2e356d04-5aaf-47d4-9bc3-4abba78cd18d" />
+<img width="160" height="120" alt="Image" src="https://github.com/user-attachments/assets/a9cbc57f-e9c1-4985-a6af-a98e5fce5ff3" />
+<img width="160" height="120" alt="Image" src="https://github.com/user-attachments/assets/e5c67781-0ffc-43c8-9c7d-333254eed704" />
+<img width="160" height="120" alt="Image" src="https://github.com/user-attachments/assets/93900e3c-79b5-4a05-bd6c-d68814e9e101" />
 
-Butterscotch uses CMake
+### Undertale (PlayStation 2)
 
-If you are using CLion, set the platform in `Settings` > `Build, Execution, Deployment` > `CMake` and add `-DPLATFORM=glfw`
+Here's a video :3 https://youtu.be/3MoAPO8H85U
 
 ## Tales of Agentic Engineering
 

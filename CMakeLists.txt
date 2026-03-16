@@ -7,6 +7,14 @@ add_compile_options(-Wall -Wextra)
 
 set(PLATFORM "" CACHE STRING "Platform backend")
 
+# Build metadata
+set(BUTTERSCOTCH_COMMIT_HASH "unknown" CACHE STRING "Git commit hash")
+set(BUTTERSCOTCH_COMMIT_DATE "unknown" CACHE STRING "Git commit date")
+add_compile_definitions(
+    BUTTERSCOTCH_COMMIT_HASH="${BUTTERSCOTCH_COMMIT_HASH}"
+    BUTTERSCOTCH_COMMIT_DATE="${BUTTERSCOTCH_COMMIT_DATE}"
+)
+
 if(PLATFORM STREQUAL "")
     message(FATAL_ERROR "PLATFORM is not set! Use -DPLATFORM=glfw (or another supported platform).")
 endif()
@@ -51,7 +59,29 @@ elseif(PLATFORM STREQUAL "ps2")
         # Compiling on the Docker container
         target_include_directories(butterscotch PRIVATE $ENV{PS2SDK}/ee/include $ENV{PS2SDK}/common/include $ENV{PS2DEV}/ee/include $ENV{GSKIT}/include)
         target_link_directories(butterscotch PRIVATE $ENV{PS2SDK}/ee/lib $ENV{GSKIT}/lib)
-        target_link_libraries(butterscotch gskit dmakit pad kernel c m)
+        target_link_libraries(butterscotch gskit dmakit pad patches kernel c m)
+
+        # Embed ps2sdk IRX modules (sio2man, padman) as C arrays via bin2c
+        # This avoids loading from rom0: which has compatibility issues between fat/slim PS2
+        set(IRX_DIR $ENV{PS2SDK}/iop/irx)
+        set(IRX_GEN_DIR ${CMAKE_BINARY_DIR}/generated/irx)
+        file(MAKE_DIRECTORY ${IRX_GEN_DIR})
+
+        add_custom_command(
+            OUTPUT ${IRX_GEN_DIR}/sio2man_irx.c
+            COMMAND $ENV{PS2SDK}/bin/bin2c ${IRX_DIR}/sio2man.irx ${IRX_GEN_DIR}/sio2man_irx.c sio2man_irx
+            DEPENDS ${IRX_DIR}/sio2man.irx
+            COMMENT "Embedding sio2man.irx"
+        )
+        add_custom_command(
+            OUTPUT ${IRX_GEN_DIR}/padman_irx.c
+            COMMAND $ENV{PS2SDK}/bin/bin2c ${IRX_DIR}/padman.irx ${IRX_GEN_DIR}/padman_irx.c padman_irx
+            DEPENDS ${IRX_DIR}/padman.irx
+            COMMENT "Embedding padman.irx"
+        )
+
+        target_sources(butterscotch PRIVATE ${IRX_GEN_DIR}/sio2man_irx.c ${IRX_GEN_DIR}/padman_irx.c)
+        target_include_directories(butterscotch PRIVATE ${IRX_GEN_DIR})
     else()
         # This block is for when we are developing Butterscotch with CLion!
         # ps2sdk and gsKit scatter headers across per-module subdirectories;
