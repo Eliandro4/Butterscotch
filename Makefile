@@ -2,27 +2,9 @@
 
 .PHONY: all glfw android apk clean local.properties
 
-# ===[ Android SDK / NDK Detection ]===
-# Priority: ANDROID_NDK > ANDROID_NDK_HOME > ANDROID_SDK_ROOT/ndk/<latest>
-ifdef ANDROID_NDK
-  NDK_DIR := $(ANDROID_NDK)
-else ifdef ANDROID_NDK_HOME
-  NDK_DIR := $(ANDROID_NDK_HOME)
-else ifdef ANDROID_SDK_ROOT
-  # Pick the latest NDK version installed under the SDK
-  NDK_DIR := $(ANDROID_SDK_ROOT)/ndk/26.1.10909125
-else
-  NDK_DIR :=
-endif
-
-# SDK dir (for local.properties)
-ifdef ANDROID_SDK_ROOT
-  SDK_DIR := $(ANDROID_SDK_ROOT)
-else ifdef ANDROID_HOME
-  SDK_DIR := $(ANDROID_HOME)
-else
-  SDK_DIR :=
-endif
+# NDK version installed under the SDK
+NDK_DIR := $(ANDROID_HOME)/ndk/26.1.10909125
+SDK_DIR := $(ANDROID_HOME)
 
 # ===[ Targets ]===
 
