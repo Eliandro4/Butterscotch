@@ -10,7 +10,7 @@ else ifdef ANDROID_NDK_HOME
   NDK_DIR := $(ANDROID_NDK_HOME)
 else ifdef ANDROID_SDK_ROOT
   # Pick the latest NDK version installed under the SDK
-  NDK_DIR := $(lastword $(sort $(wildcard $(ANDROID_SDK_ROOT)/ndk/*)))
+  NDK_DIR := $(ANDROID_SDK_ROOT)/ndk/26.1.10909125
 else
   NDK_DIR :=
 endif
