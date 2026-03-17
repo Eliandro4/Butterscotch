@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "glfw_file_system.h"
 
 #include <time.h>
 #include "data_win.h"
@@ -28,6 +29,7 @@ static DataWin* globalDataWin = NULL;
 static VMContext* globalVm = NULL;
 static Runner* globalRunner = NULL;
 static Renderer* globalRenderer = NULL;
+static GlfwFileSystem* glfwFileSystem = NULL;
 static int32_t s_windowWidth = 0;
 static int32_t s_windowHeight = 0;
 static struct timespec s_lastFrameTime = {0, 0};
@@ -78,9 +80,12 @@ Java_com_butterscotch_ButterscotchNative_nativeInit(JNIEnv *env, jobject thiz, j
 
     globalVm = VM_create(globalDataWin);
     
+    // Initialize the file system
+    GlfwFileSystem* glfwFileSystem = GlfwFileSystem_create(dataPath);
+
     // We don't disable fixed seed here, keep it random as we don't handle CLI args
     
-    globalRunner = Runner_create(globalDataWin, globalVm);
+    globalRunner = Runner_create(globalDataWin, globalVm, (FileSystem*) glfwFileSystem);
     globalRunner->debugMode = debugMode;
 
     // Initialize renderer
@@ -117,6 +122,10 @@ Java_com_butterscotch_ButterscotchNative_nativeStep(JNIEnv *env, jobject thiz) {
         if (globalDataWin) {
             DataWin_free(globalDataWin);
             globalDataWin = NULL;
+        }
+        if (glfwFileSystem) {
+            GlfwFileSystem_destroy(glfwFileSystem);
+            glfwFileSystem = NULL;
         }
         s_lastFrameTime.tv_sec = 0;
         s_lastFrameTime.tv_nsec = 0;
