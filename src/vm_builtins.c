@@ -1484,6 +1484,7 @@ STUB_RETURN_ZERO(gamepad_button_value)
 
 static IniFile* currentIni = nullptr;
 static char* currentIniPath = nullptr;
+static bool currentIniDirty = false;
 
 static RValue builtinIniOpen(VMContext* ctx, RValue* args, int32_t argCount) {
     if (1 > argCount) return RValue_makeUndefined();
@@ -1510,6 +1511,8 @@ static RValue builtinIniOpen(VMContext* ctx, RValue* args, int32_t argCount) {
         currentIni = Ini_parse("");
     }
 
+    currentIniDirty = false;
+
     return RValue_makeUndefined();
 }
 
@@ -1518,9 +1521,11 @@ static RValue builtinIniClose(VMContext* ctx, [[maybe_unused]] RValue* args, [[m
         Runner* runner = (Runner*) ctx->runner;
         FileSystem* fs = runner->fileSystem;
 
-        char* serialized = Ini_serialize(currentIni, INI_SERIALIZE_DEFAULT_INITIAL_CAPACITY);
-        fs->vtable->writeFileText(fs, currentIniPath, serialized);
-        free(serialized);
+        if (currentIniDirty) {
+            char* serialized = Ini_serialize(currentIni, INI_SERIALIZE_DEFAULT_INITIAL_CAPACITY);
+            fs->vtable->writeFileText(fs, currentIniPath, serialized);
+            free(serialized);
+        }
 
         Ini_free(currentIni);
         currentIni = nullptr;
@@ -1572,6 +1577,7 @@ static RValue builtinIniWriteString([[maybe_unused]] VMContext* ctx, RValue* arg
     const char* value = (args[2].type == RVALUE_STRING ? args[2].string : "");
 
     Ini_setString(currentIni, section, key, value);
+    currentIniDirty = true;
     return RValue_makeUndefined();
 }
 
@@ -1583,6 +1589,7 @@ static RValue builtinIniWriteReal([[maybe_unused]] VMContext* ctx, RValue* args,
     char* valueStr = RValue_toString(args[2]);
 
     Ini_setString(currentIni, section, key, valueStr);
+    currentIniDirty = true;
     free(valueStr);
     return RValue_makeUndefined();
 }
