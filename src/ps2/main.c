@@ -414,6 +414,21 @@ int main(int argc, char* argv[]) {
     VMContext* vm = VM_create(dataWin);
     Runner* runner = Runner_create(dataWin, vm, fileSystem);
 
+    // Parse disabledObjects from CONFIG.JSN
+    JsonValue* disabledObjectsArr = JsonReader_getObject(configRoot, "disabledObjects");
+    if (disabledObjectsArr != nullptr && JsonReader_isArray(disabledObjectsArr)) {
+        sh_new_strdup(runner->disabledObjects);
+        int disabledCount = JsonReader_arrayLength(disabledObjectsArr);
+        repeat(disabledCount, i) {
+            JsonValue* elem = JsonReader_getArrayElement(disabledObjectsArr, i);
+            if (elem != nullptr && JsonReader_isString(elem)) {
+                const char* objName = JsonReader_getString(elem);
+                shput(runner->disabledObjects, objName, 1);
+                printf("Disabled object: %s\n", objName);
+            }
+        }
+    }
+
     {
         struct mallinfo mi = mallinfo();
         printf("Memory after VM and runner creation: used=%d bytes (%.1f KB), total=%d bytes (%.1f KB), free=%d bytes (%.1f KB)\n", mi.uordblks, mi.uordblks / 1024.0f, MAX_MEMORY_BYTES, MAX_MEMORY_BYTES / 1024.0f, MAX_MEMORY_BYTES - mi.uordblks, (MAX_MEMORY_BYTES - mi.uordblks) / 1024.0f);
@@ -626,9 +641,19 @@ int main(int argc, char* argv[]) {
                 u64 debugColor = GS_SETREG_RGBAQ(0xFF, 0xFF, 0xFF, 0x80, 0x00);
                 int32_t freeBytes = MAX_MEMORY_BYTES - mi.uordblks;
 
-                char debugText[192];
+                char debugText[256];
                 uint32_t vramFreeBytes = GS_VRAM_SIZE - gsGlobal->CurrentPointer;
-                snprintf(debugText, sizeof(debugText), "FPS: %d\nTick: %.2fms\nFree: %d bytes\nVRAM Free: %lu bytes\nRoom Speed: %u%s", displayedRenderFps, lastFrameTimeMs, freeBytes, (unsigned long) vramFreeBytes, roomSpeed, speedCapRemoved ? " [UNCAPPED]" : "");
+
+                // Count atlases loaded in VRAM and EE RAM cache
+                GsRenderer* gsRenderer = (GsRenderer*) renderer;
+                uint32_t vramAtlasCount = 0;
+                uint32_t eeramAtlasCount = 0;
+                repeat(gsRenderer->atlasCount, ai) {
+                    if (gsRenderer->atlasToChunk[ai] >= 0) vramAtlasCount++;
+                    if (gsRenderer->eeCacheEntries[ai].atlasId >= 0) eeramAtlasCount++;
+                }
+
+                snprintf(debugText, sizeof(debugText), "FPS: %d\nTick: %.2fms\nFree: %d bytes\nVRAM Free: %lu bytes\nRoom Speed: %u%s\nAtlas: (%u, %u, %u)", displayedRenderFps, lastFrameTimeMs, freeBytes, (unsigned long) vramFreeBytes, roomSpeed, speedCapRemoved ? " [UNCAPPED]" : "", vramAtlasCount, eeramAtlasCount, gsRenderer->atlasCount);
                 gsKit_fontm_print_scaled(gsGlobal, gsFontM, 10.0f, 10.0f, 10, 0.6f, debugColor, debugText);
             }
 
