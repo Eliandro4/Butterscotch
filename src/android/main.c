@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "glfw_file_system.h"
+#include "ma_audio_system.h"
 
 #include <time.h>
 #include "data_win.h"
@@ -79,12 +80,9 @@ Java_com_butterscotch_ButterscotchNative_nativeInit(JNIEnv *env, jobject thiz, j
     LOGI("Loaded \"%s\" (%d) successfully!", globalDataWin->gen8.name, globalDataWin->gen8.gameID);
 
     globalVm = VM_create(globalDataWin);
-    
-    // Initialize the file system
-    GlfwFileSystem* glfwFileSystem = GlfwFileSystem_create(dataPath);
 
-    // We don't disable fixed seed here, keep it random as we don't handle CLI args
-    
+    glfwFileSystem = GlfwFileSystem_create(dataPath);
+
     globalRunner = Runner_create(globalDataWin, globalVm, (FileSystem*) glfwFileSystem);
     globalRunner->debugMode = debugMode;
 
@@ -92,6 +90,15 @@ Java_com_butterscotch_ButterscotchNative_nativeInit(JNIEnv *env, jobject thiz, j
     globalRenderer = GLRenderer_create();
     globalRenderer->vtable->init(globalRenderer, globalDataWin);
     globalRunner->renderer = globalRenderer;
+
+    // Initialize the audio system
+    MaAudioSystem* maAudio = nullptr;
+    if (!headlessMode) {
+        maAudio = MaAudioSystem_create();
+        AudioSystem* audioSystem = (AudioSystem*) maAudio;
+        audioSystem->vtable->init(audioSystem, globalDataWin, (FileSystem*) glfwFileSystem);
+        globalRunner->audioSystem = audioSystem;
+    }
 
     Runner_initFirstRoom(globalRunner);
 }
@@ -112,6 +119,10 @@ Java_com_butterscotch_ButterscotchNative_nativeStep(JNIEnv *env, jobject thiz) {
             globalRenderer = NULL;
         }
         if (globalRunner) {
+            if (globalRunner->audioSystem != nullptr) {
+                globalRunner->audioSystem->vtable->destroy(globalRunner->audioSystem);
+                globalRunner->audioSystem = nullptr;
+            }
             Runner_free(globalRunner);
             globalRunner = NULL;
         }
@@ -132,6 +143,7 @@ Java_com_butterscotch_ButterscotchNative_nativeStep(JNIEnv *env, jobject thiz) {
         return JNI_FALSE;
     }
 
+    double elapsed = 0.0;
     // Limit frame rate to room speed
     if (globalRunner->currentRoom->speed > 0) {
         double targetFrameTime = 1.0 / (double) globalRunner->currentRoom->speed;
@@ -142,7 +154,7 @@ Java_com_butterscotch_ButterscotchNative_nativeStep(JNIEnv *env, jobject thiz) {
         if (s_lastFrameTime.tv_sec == 0) {
             s_lastFrameTime = now;
         } else {
-            double elapsed = (double) (now.tv_sec - s_lastFrameTime.tv_sec) + 
+            elapsed = (double) (now.tv_sec - s_lastFrameTime.tv_sec) + 
                             (double) (now.tv_nsec - s_lastFrameTime.tv_nsec) / 1e9;
             
             double remaining = targetFrameTime - elapsed;
@@ -173,6 +185,13 @@ Java_com_butterscotch_ButterscotchNative_nativeStep(JNIEnv *env, jobject thiz) {
     
     // Run logic
     Runner_step(globalRunner);
+
+    // Update audio system (gain fading, cleanup ended sounds)
+    if (globalRunner->audioSystem != nullptr) {
+        if (0.0f > elapsed) elapsed = 0.0f;
+        if (elapsed > 0.1f) elapsed = 0.1f; // cap delta to avoid huge fades on lag spikes
+        globalRunner->audioSystem->vtable->update(globalRunner->audioSystem, elapsed);
+    }
 
     Room* activeRoom = globalRunner->currentRoom;
 

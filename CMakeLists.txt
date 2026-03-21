@@ -129,6 +129,10 @@ elseif(PLATFORM STREQUAL "ps2")
 elseif(PLATFORM STREQUAL "android")
     # stb_image
     target_include_directories(butterscotch PUBLIC vendor/stb/image)
+    # stb_vorbis
+    target_include_directories(butterscotch PUBLIC vendor/stb/vorbis)
+    # miniaudio
+    target_include_directories(butterscotch PUBLIC vendor/miniaudio)
     
     find_library(log-lib log)
     find_library(android-lib android)

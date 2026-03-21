@@ -9,6 +9,7 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.documentfile.provider.DocumentFile
 import java.io.File
 import java.io.FileOutputStream
 
@@ -24,7 +25,7 @@ class MainActivity : AppCompatActivity() {
     private var selectedFilePath: String? = null
 
     companion object {
-        private const val REQUEST_CODE_OPEN_DOCUMENT = 1001
+        private const val REQUEST_CODE_OPEN_TREE = 1002
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,11 +40,11 @@ class MainActivity : AppCompatActivity() {
         btnEditGamepad = findViewById(R.id.btnEditGamepad)
 
         btnSelectFile.setOnClickListener {
-            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                addCategory(Intent.CATEGORY_OPENABLE)
-                type = "*/*"
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
             }
-            startActivityForResult(intent, REQUEST_CODE_OPEN_DOCUMENT)
+            startActivityForResult(intent, REQUEST_CODE_OPEN_TREE)
         }
 
         btnLaunch.setOnClickListener {
@@ -65,21 +66,35 @@ class MainActivity : AppCompatActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_CODE_OPEN_DOCUMENT && resultCode == Activity.RESULT_OK) {
-            data?.data?.let { uri ->
-                tvSelectedFile.text = "Copying file to cache..."
+        if (requestCode == REQUEST_CODE_OPEN_TREE && resultCode == Activity.RESULT_OK) {
+            data?.data?.let { treeUri ->
+                try {
+                    contentResolver.takePersistableUriPermission(
+                        treeUri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (_: SecurityException) {
+                    // Some providers do not support persistable permissions; copy still works this session.
+                }
+
+                tvSelectedFile.text = "Copying game files to cache..."
                 btnLaunch.isEnabled = false
-                
+
                 Thread {
-                    val filePath = copyUriToCache(uri)
+                    val filePath = copyGameFolderToCache(treeUri)
                     runOnUiThread {
                         if (filePath != null) {
                             selectedFilePath = filePath
-                            tvSelectedFile.text = "Selected: ${File(filePath).name}"
+                            tvSelectedFile.text = "Ready: ${File(filePath).name}"
                             btnLaunch.isEnabled = true
                         } else {
-                            tvSelectedFile.text = "Failed to copy file"
-                            Toast.makeText(this, "Could not read the selected file", Toast.LENGTH_SHORT).show()
+                            selectedFilePath = null
+                            tvSelectedFile.text = "Could not find data.win / game.unx in folder"
+                            Toast.makeText(
+                                this,
+                                "Pick the folder that contains the data file and .ogg music files",
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                     }
                 }.start()
@@ -87,20 +102,53 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun copyUriToCache(uri: Uri): String? {
-        try {
-            val fileName = "data.win" // Let's simplify and just name it data.win in cache
-            val cacheFile = File(cacheDir, fileName)
-            
-            contentResolver.openInputStream(uri)?.use { inputStream ->
-                FileOutputStream(cacheFile).use { outputStream ->
-                    inputStream.copyTo(outputStream)
-                }
-            }
-            return cacheFile.absolutePath
+    /**
+     * Copies the whole selected directory into app cache so external (non-embedded) sounds
+     * resolve next to the data archive, same as on desktop.
+     */
+    private fun copyGameFolderToCache(treeUri: Uri): String? {
+        val root = DocumentFile.fromTreeUri(this, treeUri) ?: return null
+        val destDir = File(cacheDir, "game_data_${System.currentTimeMillis()}")
+        destDir.mkdirs()
+
+        return try {
+            copyDocumentTree(root, destDir, "")
+            findMainDataFile(destDir)?.absolutePath
         } catch (e: Exception) {
             e.printStackTrace()
-            return null
+            null
         }
+    }
+
+    private fun copyDocumentTree(node: DocumentFile, destRoot: File, relativePrefix: String) {
+        when {
+            node.isDirectory -> {
+                node.listFiles().forEach { child ->
+                    val name = child.name ?: return@forEach
+                    val nextRel = if (relativePrefix.isEmpty()) name else "$relativePrefix/$name"
+                    copyDocumentTree(child, destRoot, nextRel)
+                }
+            }
+            node.isFile -> {
+                val out = File(destRoot, relativePrefix)
+                out.parentFile?.mkdirs()
+                contentResolver.openInputStream(node.uri)?.use { input ->
+                    FileOutputStream(out).use { output -> input.copyTo(output) }
+                }
+            }
+        }
+    }
+
+    private fun findMainDataFile(dir: File): File? {
+        val candidates = listOf("data.win", "game.unx", "game.win", "game.droid")
+        for (name in candidates) {
+            val f = File(dir, name)
+            if (f.isFile) return f
+        }
+        return dir.walkTopDown()
+            .maxDepth(6)
+            .firstOrNull { file ->
+                file.isFile && candidates.any { file.name.equals(it, ignoreCase = true) }
+            }
     }
 }

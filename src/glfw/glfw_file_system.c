@@ -8,13 +8,26 @@
 
 // ===[ Helpers ]===
 
+// GameMaker stores paths with backslashes; POSIX needs forward slashes.
+static char* normalizeRelativePath(const char* relativePath) {
+    size_t len = strlen(relativePath);
+    char* out = safeMalloc(len + 1);
+    for (size_t i = 0; i < len; i++) {
+        out[i] = relativePath[i] == '\\' ? '/' : relativePath[i];
+    }
+    out[len] = '\0';
+    return out;
+}
+
 static char* buildFullPath(GlfwFileSystem* fs, const char* relativePath) {
+    char* norm = normalizeRelativePath(relativePath);
     size_t baseLen = strlen(fs->basePath);
-    size_t relLen = strlen(relativePath);
+    size_t relLen = strlen(norm);
     char* fullPath = safeMalloc(baseLen + relLen + 1);
     memcpy(fullPath, fs->basePath, baseLen);
-    memcpy(fullPath + baseLen, relativePath, relLen);
+    memcpy(fullPath + baseLen, norm, relLen);
     fullPath[baseLen + relLen] = '\0';
+    free(norm);
     return fullPath;
 }
 
