@@ -1,5 +1,6 @@
 #include "vm_builtins.h"
 #include "instance.h"
+#include "json_reader.h"
 #include "runner.h"
 
 #include <stdio.h>
@@ -9,6 +10,7 @@
 #include <ctype.h>
 #include <time.h>
 
+#include "rvalue.h"
 #include "stb_ds.h"
 #include "text_utils.h"
 #include "collision.h"
@@ -380,6 +382,8 @@ RValue VMBuiltins_getVariable(VMContext* ctx, const char* name, int32_t arrayInd
     if (strcmp(name, "path_action_restart") == 0) return RValue_makeReal(1.0);
     if (strcmp(name, "path_action_continue") == 0) return RValue_makeReal(2.0);
     if (strcmp(name, "path_action_reverse") == 0) return RValue_makeReal(3.0);
+
+    if (strcmp(name, "fps") == 0) return RValue_makeReal(ctx->dataWin->gen8.gms2FPS);
 
     fprintf(stderr, "VM: Unhandled built-in variable read '%s' (arrayIndex=%d)\n", name, arrayIndex);
     return RValue_makeReal(0.0);
@@ -1455,6 +1459,18 @@ static RValue builtinArrayLengthId([[maybe_unused]] VMContext* ctx, [[maybe_unus
     static RValue builtin_##name([[maybe_unused]] VMContext* ctx, [[maybe_unused]] RValue* args, [[maybe_unused]] int32_t argCount) { \
         logStubbedFunction(ctx, #name); \
         return RValue_makeReal(0.0); \
+    }
+
+#define STUB_RETURN_TRUE(name) \
+    static RValue builtin_##name([[maybe_unused]] VMContext* ctx, [[maybe_unused]] RValue* args, [[maybe_unused]] int32_t argCount) { \
+        logStubbedFunction(ctx, #name); \
+        return RValue_makeBool(true); \
+    }
+
+#define STUB_RETURN_VALUE(name, value) \
+    static RValue builtin_##name([[maybe_unused]] VMContext* ctx, [[maybe_unused]] RValue* args, [[maybe_unused]] int32_t argCount) { \
+        logStubbedFunction(ctx, #name); \
+        return RValue_makeReal(value); \
     }
 
 #define STUB_RETURN_UNDEFINED(name) \
@@ -3181,8 +3197,8 @@ static RValue builtinMakeColourHsv(VMContext* ctx, RValue* args, int32_t argCoun
 }
 
 // Display stubs
-STUB_RETURN_ZERO(display_get_width)
-STUB_RETURN_ZERO(display_get_height)
+STUB_RETURN_VALUE(display_get_width, 640.0)
+STUB_RETURN_VALUE(display_get_height, 480.0)
 
 // place_meeting(x, y, obj) - returns true if the calling instance would collide with obj at position (x, y)
 static RValue builtinPlaceMeeting(VMContext* ctx, RValue* args, int32_t argCount) {
@@ -3609,6 +3625,53 @@ static RValue builtinPathEnd(VMContext* ctx, [[maybe_unused]] RValue* args, [[ma
     return RValue_makeUndefined();
 }
 
+// string_hash_to_newline - converts # to \n in a string
+static RValue builtinStringHashToNewline([[maybe_unused]] VMContext* ctx, RValue* args, int32_t argCount) { 
+    if (1 > argCount) return RValue_makeString(""); 
+    char* str = RValue_toString(args[0]); 
+    int32_t len = (int32_t) strlen(str); 
+    char *result = malloc((len + 1)*sizeof(char)); 
+    for(int i = 0; i < len; i++) { 
+        char cur = str[i]; 
+        if(cur == '#') 
+            cur = '\n'; 
+        result[i] = cur; 
+    }
+    result[len] = '\0';
+    free(str); 
+    return RValue_makeOwnedString(result); }
+
+// json_decode
+// TODO: This is hardcoded for deltarune, for some reason the args string isn't working properly
+static RValue builtinJsonDecode(VMContext* ctx, [[maybe_unused]] RValue* args, int32_t argCount) {
+    if (1 > argCount) {
+        fprintf(stderr, "[json_decode] Expected at least 1 argument\n");
+        return RValue_makeUndefined();
+    }
+
+    int32_t mapIndex = dsMapCreate();
+    DsMapEntry **mapPtr = dsMapGet(mapIndex);
+    Runner* runner = (Runner*) ctx->runner;
+    FileSystem* fs = runner->fileSystem;
+    char* content = fs->vtable->readFileText(fs, "lang/lang_en.json");
+    const JsonValue* json = JsonReader_parse(content);
+
+    for(int i = 0; i < JsonReader_objectLength(json); i++)
+    {
+        const char *key = JsonReader_getObjectKey(json, i);
+        RValue val = RValue_makeOwnedString(
+            (char*)JsonReader_getString(
+                JsonReader_getObjectValue(json, i)
+            )
+        );
+        shput(*mapPtr, key, val);
+    }
+
+    return RValue_makeReal((double) mapIndex);
+}
+
+STUB_RETURN_VALUE(font_add_sprite_ext, -1.0)
+
 // ===[ REGISTRATION ]===
 
 void VMBuiltins_registerAll(void) {
@@ -3948,4 +4011,7 @@ void VMBuiltins_registerAll(void) {
     // Misc
     registerBuiltin("get_timer", builtin_get_timer);
     registerBuiltin("action_set_alarm", builtinActionSetAlarm);
+    registerBuiltin("string_hash_to_newline", builtinStringHashToNewline);
+    registerBuiltin("json_decode", builtinJsonDecode);
+    registerBuiltin("font_add_sprite_ext", builtin_font_add_sprite_ext);
 }
