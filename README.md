@@ -1,5 +1,10 @@
 <h1 align="center">🥧 Butterscotch 🥧</h1>
 
+<!-- Badges, about the GitHub repository itself -->
+<p align="center">
+<a href="https://discord.gg/2gQR7t3WJR"><img src="https://img.shields.io/discord/1406856655920168971?color=5865F2&logo=discord&logoColor=white&label=discord"></a>
+</p>
+
 > [!IMPORTANT]  
 > Butterscotch is still VERY early in development and it is NOT that good yet.
 
