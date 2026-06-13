@@ -14243,6 +14243,14 @@ static RValue fontAddSpriteImpl(VMContext* ctx, int32_t spriteIndex, uint16_t* c
     return RValue_makeReal((GMLReal) newFontIndex);
 }
 
+// font_exists(font_index): returns true if font_index refers to a valid font asset.
+static RValue builtin_font_exists(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (1 > argCount) return RValue_makeBool(false);
+    int32_t fontIndex = RValue_toInt32(args[0]);
+    bool exists = fontIndex >= 0 && (uint32_t) fontIndex < ctx->dataWin->font.count;
+    return RValue_makeBool(exists);
+}
+
 static RValue builtin_font_get_name(VMContext* ctx, RValue* args, int32_t argCount) {
     if (1 > argCount) {
         fprintf(stderr, "[font_get_name] Expected 1 argument, got 0");
@@ -15637,6 +15645,7 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "font_add_sprite_ext", builtin_font_add_sprite_ext);
     VM_registerBuiltin(ctx, "font_get_name", builtin_font_get_name);
     VM_registerBuiltin(ctx, "font_get_info", builtin_font_get_info);
+    VM_registerBuiltin(ctx, "font_exists", builtin_font_exists);
     VM_registerBuiltin(ctx, "object_exists", builtin_object_exists);
     VM_registerBuiltin(ctx, "object_get_name", builtin_object_get_name);
     VM_registerBuiltin(ctx, "object_name", builtin_object_get_name); // alias for pre-GMS 2.3
