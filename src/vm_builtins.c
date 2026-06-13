@@ -6547,6 +6547,33 @@ static RValue builtin_file_text_open_read(VMContext* ctx, RValue* args, int32_t 
     return RValue_makeReal((GMLReal) slot);
 }
 
+// file_text_open_from_string(str): opens a virtual read-only text file backed by an in-memory string.
+static RValue builtin_file_text_open_from_string(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (1 > argCount) return RValue_makeReal(-1.0);
+    Runner* runner = ctx->runner;
+
+    int32_t slot = findFreeTextFileSlot(runner);
+    if (0 > slot) {
+        fprintf(stderr, "Warning: Too many open text files!\n");
+        abort();
+    }
+
+    const char* src = (args[0].type == RVALUE_STRING && args[0].string != nullptr) ? args[0].string : "";
+    char* content = safeStrdup(src);
+
+    OpenTextFile file = {0};
+    file.content = content;
+    file.writeBuffer = nullptr;
+    file.filePath = nullptr;
+    file.readPos = 0;
+    file.contentLen = (int32_t) strlen(content);
+    file.isWriteMode = false;
+    file.isOpen = true;
+    runner->openTextFiles[slot] = file;
+
+    return RValue_makeReal((GMLReal) slot);
+}
+
 static RValue builtin_file_text_open_write(VMContext* ctx, RValue* args, int32_t argCount) {
     if (1 > argCount) return RValue_makeReal(-1.0);
     const char* path = (args[0].type == RVALUE_STRING ? args[0].string : "");
@@ -15100,6 +15127,7 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "file_exists", builtin_file_exists);
     VM_registerBuiltin(ctx, "file_text_open_write", builtin_file_text_open_write);
     VM_registerBuiltin(ctx, "file_text_open_read", builtin_file_text_open_read);
+    VM_registerBuiltin(ctx, "file_text_open_from_string", builtin_file_text_open_from_string);
     VM_registerBuiltin(ctx, "file_text_close", builtin_file_text_close);
     VM_registerBuiltin(ctx, "file_text_write_string", builtin_file_text_write_string);
     VM_registerBuiltin(ctx, "file_text_writeln", builtin_file_text_writeln);
