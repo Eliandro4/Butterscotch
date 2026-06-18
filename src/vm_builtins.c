@@ -5570,6 +5570,62 @@ static RValue builtin_array_delete(MAYBE_UNUSED VMContext* ctx, RValue* args, in
     return RValue_makeUndefined();
 }
 
+// array_copy(dest, dest_index, src, src_index, length)
+static RValue builtin_array_copy(MAYBE_UNUSED VMContext* ctx, RValue* args, int32_t argCount) {
+    if (5 > argCount) return RValue_makeUndefined();
+    if (args[0].type != RVALUE_ARRAY || args[0].array == nullptr) return RValue_makeUndefined();
+    if (args[2].type != RVALUE_ARRAY || args[2].array == nullptr) return RValue_makeUndefined();
+
+    GMLArray* dest = args[0].array;
+    int32_t destIndex = (int32_t) RValue_toReal(args[1]);
+    GMLArray* src    = args[2].array;
+    int32_t srcIndex = (int32_t) RValue_toReal(args[3]);
+    int32_t length   = (int32_t) RValue_toReal(args[4]);
+
+    int32_t srcLen = GMLArray_length1D(src);
+
+    // Resolve negative src_index (counts from end)
+    if (srcIndex < 0) srcIndex = srcLen + srcIndex;
+
+    // Resolve negative length (count backwards: start = srcIndex + length + 1, count = |length|)
+    if (length < 0) {
+        srcIndex = srcIndex + length + 1;
+        length   = -length;
+    }
+
+    if (length == 0) return RValue_makeUndefined();
+
+    // Clamp the copy to what is actually available in src (must not read OOB)
+    if (srcIndex < 0 || srcIndex >= srcLen) return RValue_makeUndefined();
+    if (srcIndex + length > srcLen) length = srcLen - srcIndex;
+
+    // Clamp negative dest_index to 0
+    if (destIndex < 0) destIndex = 0;
+
+    // Grow dest to accommodate the write, inserting zeroes in any gap between the current end and destIndex
+    int32_t destOldLen = GMLArray_length1D(dest);
+    int32_t destNeeded = destIndex + length;
+    if (destNeeded > destOldLen) {
+        GMLArray_growTo(dest, destNeeded);
+        // Pad the gap between old end and destIndex with real 0
+        for (int32_t i = destOldLen; destIndex > i; i++) {
+            RValue* gap = GMLArray_slot(dest, i);
+            if (gap != nullptr) { RValue_free(gap); *gap = RValue_makeReal(0.0); }
+        }
+    }
+
+    // Copy elements one by one, making independent copies
+    for (int32_t i = 0; i < length; i++) {
+        RValue srcVal = GMLArray_get(src, srcIndex + i);
+        RValue* dstSlot = GMLArray_slot(dest, destIndex + i);
+        if (dstSlot == nullptr) continue;
+        RValue_free(dstSlot);
+        *dstSlot = RValue_makeIndependent(srcVal);
+    }
+
+    return RValue_makeUndefined();
+}
+
 // ===[ COLLISION FUNCTIONS]===
 
 static RValue builtin_place_free(VMContext* ctx, RValue* args, int32_t argCount) {
@@ -8641,6 +8697,86 @@ static RValue builtin_buffer_save_ext(MAYBE_UNUSED VMContext* ctx, RValue* args,
     }
 
     free(filename);
+    return RValue_makeUndefined();
+}
+
+// buffer_get_used_size(buffer) -> real
+// Returns the "used" size: for grow buffers the high-water mark, for all others the allocated size.
+static RValue builtin_buffer_get_used_size(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Runner* runner = ctx->runner;
+    int32_t id = RValue_toInt32(args[0]);
+    GmlBuffer* buf = gmlBufferGet(runner, id);
+    if (buf == nullptr) return RValue_makeReal(0.0);
+    int32_t used = (buf->type == GML_BUFFER_GROW) ? buf->usedSize : buf->size;
+    return RValue_makeReal((GMLReal) used);
+}
+
+// buffer_copy(src_buffer, src_offset, size, dest_buffer, dest_offset)
+// Copies `size` bytes from src_buffer starting at src_offset into dest_buffer at dest_offset.
+// - Cannot copy a buffer to itself.
+// - The source region is clamped to src_buffer's size.
+// - Resize rules per buffer type:
+//     buffer_grow  -> resized to fit
+//     buffer_wrap  -> not resized (data wraps within existing bounds)
+//     buffer_fixed / buffer_fast -> not resized; only what fits is copied
+// - Seek positions of both buffers are NOT changed.
+// - The dest buffer's usedSize (grow buffers) is updated.
+static RValue builtin_buffer_copy(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Runner* runner = ctx->runner;
+    int32_t srcId    = RValue_toInt32(args[0]);
+    int32_t srcOff   = RValue_toInt32(args[1]);
+    int32_t copySize = RValue_toInt32(args[2]);
+    int32_t dstId    = RValue_toInt32(args[3]);
+    int32_t dstOff   = RValue_toInt32(args[4]);
+
+    if (srcId == dstId) {
+        fprintf(stderr, "buffer_copy: cannot copy a buffer to itself\n");
+        return RValue_makeUndefined();
+    }
+
+    GmlBuffer* src = gmlBufferGet(runner, srcId);
+    GmlBuffer* dst = gmlBufferGet(runner, dstId);
+    if (src == nullptr || dst == nullptr) return RValue_makeUndefined();
+
+    // Clamp source region to the source buffer's actual size
+    int32_t srcMax = (src->type == GML_BUFFER_GROW) ? src->usedSize : src->size;
+    if (srcOff < 0) srcOff = 0;
+    if (srcOff > srcMax) srcOff = srcMax;
+    if (copySize < 0) copySize = 0;
+    if (srcOff + copySize > srcMax) copySize = srcMax - srcOff;
+    if (copySize <= 0) return RValue_makeUndefined();
+
+    if (dstOff < 0) dstOff = 0;
+    int32_t dstEnd = dstOff + copySize;
+
+    // Resize destination according to its type
+    if (dst->type == GML_BUFFER_GROW) {
+        gmlBufferEnsureSize(dst, dstEnd);
+    }
+    // buffer_wrap, buffer_fixed, buffer_fast: do not resize; clamp the write
+
+    // Determine how many bytes we can actually write
+    int32_t actualWrite = copySize;
+    if (dst->type == GML_BUFFER_WRAP) {
+        // Wrap: write modulo the buffer size
+        for (int32_t i = 0; i < copySize; i++) {
+            int32_t dstPos = (dstOff + i) % dst->size;
+            dst->data[dstPos] = src->data[srcOff + i];
+        }
+        // Update usedSize not applicable for wrap; nothing more to do
+        return RValue_makeUndefined();
+    } else {
+        // fixed / fast / grow: only write what fits
+        if (dstEnd > dst->size) actualWrite = dst->size - dstOff;
+        if (actualWrite <= 0) return RValue_makeUndefined();
+        memcpy(dst->data + dstOff, src->data + srcOff, (size_t) actualWrite);
+    }
+
+    // Update the grow-buffer high-water mark
+    if (dst->type == GML_BUFFER_GROW && dstOff + actualWrite > dst->usedSize) {
+        dst->usedSize = dstOff + actualWrite;
+    }
+
     return RValue_makeUndefined();
 }
 
@@ -15346,6 +15482,7 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "array_delete", builtin_array_delete);
     VM_registerBuiltin(ctx, "array_insert", builtin_array_insert);
     VM_registerBuiltin(ctx, "array_create", builtin_array_create);
+    VM_registerBuiltin(ctx, "array_copy", builtin_array_copy);
 
     // Steam stubs
     VM_registerBuiltin(ctx, "steam_initialised", builtin_steam_initialised);
@@ -15592,6 +15729,8 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "buffer_md5", builtin_buffer_md5);
     VM_registerBuiltin(ctx, "buffer_sha1", builtin_buffer_sha1);
     VM_registerBuiltin(ctx, "buffer_get_surface", builtin_buffer_get_surface);
+    VM_registerBuiltin(ctx, "buffer_copy", builtin_buffer_copy);
+    VM_registerBuiltin(ctx, "buffer_get_used_size", builtin_buffer_get_used_size);
     VM_registerBuiltin(ctx, "sha1_file", builtin_sha1_file);
     VM_registerBuiltin(ctx, "md5_file", builtin_md5_file);
 
