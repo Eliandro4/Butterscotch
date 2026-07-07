@@ -37,12 +37,17 @@ struct ButterscotchContext {
     int fbW;
     int fbH;
     bool isGLES;
+    char* dataWinPath; // current data.win path (updated on game_change)
+    char* savesPath;  // saved games path (persists across game_change)
+    bool audioIsHost; // true when the host installed custom audio callbacks
+    ButterscotchAudioCallbacks hostAudioCallbacks;
 #ifndef PLATFORM_ANDROID
     GLFWwindow* window;
 #else
     EGLDisplay eglDisplay;
     EGLSurface eglSurface;
     EGLContext eglContext;
+    EGLConfig eglConfig;
     bool usesHostWindow;
 #endif
 };
@@ -64,6 +69,7 @@ static bool libEnsureContext(ButterscotchContext* ctx, int w, int h, void* nativ
     EGLConfig config;
     EGLint num;
     if (!eglChooseConfig(ctx->eglDisplay, attr, &config, 1, &num) || num < 1) return false;
+    ctx->eglConfig = config;
 
     EGLint ctxAttr[] = { EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE };
     ctx->eglContext = eglCreateContext(ctx->eglDisplay, config, EGL_NO_CONTEXT, ctxAttr);
@@ -152,271 +158,8 @@ static void libSetWindowTitle(MAYBE_UNUSED const char* title) {
     // No window to title in embedded mode.
 }
 
-// ===[ Lifecycle ]===
-
-static ButterscotchContext* createCommon(const char* dataWinPath, const char* savesPath, void* nativeWindow) {
-    if (dataWinPath == NULL) return NULL;
-
-    fprintf(stderr, "Butterscotch: Loading %s...\n", dataWinPath);
-
-    DataWin* dataWin = DataWin_parse(
-        dataWinPath,
-        (DataWinParserOptions) {
-            .parseGen8 = true,
-            .parseOptn = true,
-            .parseLang = true,
-            .parseExtn = true,
-            .parseSond = true,
-            .parseAgrp = true,
-            .parseSprt = true,
-            .parseBgnd = true,
-            .parsePath = true,
-            .parseScpt = true,
-            .parseGlob = true,
-            .parseShdr = true,
-            .parseFont = true,
-            .parseTmln = true,
-            .parseObjt = true,
-            .parseRoom = true,
-            .parseTpag = true,
-            .parseCode = true,
-            .parseVari = true,
-            .parseFunc = true,
-            .parseStrg = true,
-            .parseTxtr = true,
-            .parseAudo = true,
-            .skipLoadingPreciseMasksForNonPreciseSprites = true,
-            .loadType = DATAWINLOADTYPE_LOAD_IN_MEMORY_AHEAD_OF_TIME,
-            .lazyLoadRooms = false,
-            .eagerlyLoadedRooms = NULL
-        }
-    );
-
-    if (dataWin == NULL) {
-        fprintf(stderr, "Butterscotch: Failed to parse data.win\n");
-        return NULL;
-    }
-
-    fprintf(stderr, "Butterscotch: Loaded \"%s\" (%d) [WAD Version %u]\n",
-        dataWin->gen8.name, dataWin->gen8.gameID, dataWin->gen8.wadVersion);
-
-    VMContext* vm = VM_create(dataWin);
-
-    ButterscotchContext* ctx = safeMalloc(sizeof(ButterscotchContext));
-    memset(ctx, 0, sizeof(*ctx));
-    ctx->winW = (int32_t) dataWin->gen8.defaultWindowWidth;
-    ctx->winH = (int32_t) dataWin->gen8.defaultWindowHeight;
-
-    // GL context must be current before GLRenderer_create (it compiles shaders / creates GL objects).
-    if (!libEnsureContext(ctx, ctx->winW, ctx->winH, nativeWindow)) {
-        fprintf(stderr, "Butterscotch: Failed to create GL context\n");
-        VM_free(vm);
-        DataWin_free(dataWin);
-        free(ctx);
-        return NULL;
-    }
-
-    char* bundleDir = dirnameOf(dataWinPath);
-    FileSystem* fileSystem = (FileSystem*) OverlayFileSystem_create(bundleDir, savesPath ? savesPath : bundleDir);
-    free(bundleDir);
-
-    Renderer* renderer = GLRenderer_create();
-    ((GLRenderer*) renderer)->hostFramebuffer = 0; // render into the (offscreen / host) default framebuffer
-    ((GLRenderer*) renderer)->isGLES = ctx->isGLES;
-
-    AudioSystem* audioSystem = (AudioSystem*) MaAudioSystem_create(dataWin);
-    if (audioSystem == NULL) {
-        fprintf(stderr, "Butterscotch: MaAudioSystem_create returned NULL; falling back to silent audio\n");
-        audioSystem = (AudioSystem*) NoopAudioSystem_create();
-    }
-
-    Runner* runner = Runner_create(dataWin, vm, renderer, fileSystem, audioSystem);
-    runner->getWindowSize = libGetWindowSize;
-    runner->setWindowTitle = libSetWindowTitle;
-    runner->windowHasFocus = NULL;
-
-    Runner_initFirstRoom(runner);
-
-    // Release the GL context from the main thread so the game thread can claim it.
-    // On Wayland/GLFW, a context tied to one thread can block make-current on another.
-    glfwMakeContextCurrent(NULL);
-
-    ctx->dataWin = dataWin;
-    ctx->vm = vm;
-    ctx->renderer = renderer;
-    ctx->audioSystem = audioSystem;
-    ctx->fileSystem = fileSystem;
-    ctx->runner = runner;
-
-    fprintf(stderr, "Butterscotch: Initialized successfully\n");
-    return ctx;
-}
-
-BUTTERSCOTCH_API ButterscotchContext* butterscotch_create(const char* dataWinPath) {
-    return createCommon(dataWinPath, NULL, NULL);
-}
-
-BUTTERSCOTCH_API ButterscotchContext* butterscotch_createWithSaves(const char* dataWinPath, const char* savesPath) {
-    return createCommon(dataWinPath, savesPath, NULL);
-}
-
-BUTTERSCOTCH_API ButterscotchContext* butterscotch_create_with_native_window(const char* dataWinPath, const char* savesPath, void* nativeWindow) {
-    return createCommon(dataWinPath, savesPath, nativeWindow);
-}
-
-BUTTERSCOTCH_API void butterscotch_free(ButterscotchContext* ctx) {
-    if (ctx == NULL) return;
-
-    ctx->audioSystem->vtable->destroy(ctx->audioSystem);
-    ctx->renderer->vtable->destroy(ctx->renderer);
-    Runner_free(ctx->runner);
-    VM_free(ctx->vm);
-    DataWin_free(ctx->dataWin);
-
-#ifndef PLATFORM_ANDROID
-    if (ctx->window) {
-        glfwMakeContextCurrent(ctx->window);
-        glfwDestroyWindow(ctx->window);
-        glfwTerminate();
-    }
-#else
-    if (ctx->eglDisplay != EGL_NO_DISPLAY) {
-        eglMakeCurrent(ctx->eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-        if (ctx->eglSurface != EGL_NO_SURFACE) eglDestroySurface(ctx->eglDisplay, ctx->eglSurface);
-        if (ctx->eglContext != EGL_NO_CONTEXT) eglDestroyContext(ctx->eglDisplay, ctx->eglContext);
-        eglTerminate(ctx->eglDisplay);
-    }
-#endif
-
-    free(ctx->fbBuffer);
-    free(ctx->rawBuffer);
-    free(ctx);
-}
-
-BUTTERSCOTCH_API void butterscotch_resize(ButterscotchContext* ctx, int32_t width, int32_t height) {
-    if (ctx == NULL || width <= 0 || height <= 0) return;
-    ctx->winW = width;
-    ctx->winH = height;
-#ifndef PLATFORM_ANDROID
-    if (ctx->window) glfwSetWindowSize(ctx->window, width, height);
-#endif
-    // Android host window surfaces resize with the ANativeWindow automatically.
-}
-
-BUTTERSCOTCH_API void butterscotch_beginFrame(ButterscotchContext* ctx) {
-    if (ctx == NULL) return;
-    RunnerKeyboard_beginFrame(ctx->runner->keyboard);
-}
-
-BUTTERSCOTCH_API void butterscotch_step(ButterscotchContext* ctx) {
-    if (ctx == NULL) return;
-    libMakeContextCurrent(ctx);
-    Runner_step(ctx->runner);
-    ctx->audioSystem->vtable->update(ctx->audioSystem, 1.0f / 30.0f);
-}
-
-BUTTERSCOTCH_API void butterscotch_draw(ButterscotchContext* ctx) {
-    if (ctx == NULL) return;
-    libMakeContextCurrent(ctx);
-
-    Runner* runner = ctx->runner;
-    int32_t winW = ctx->winW;
-    int32_t winH = ctx->winH;
-    Gen8* gen8 = &runner->dataWin->gen8;
-
-    if (!runner->appSurfaceEnabled) {
-        runner->applicationWidth = winW;
-        runner->applicationHeight = winH;
-        runner->usingAppSurface = false;
-    } else {
-        if (runner->applicationWidth <= 0 || runner->applicationHeight <= 0) {
-            runner->applicationWidth = (int32_t) gen8->defaultWindowWidth;
-            runner->applicationHeight = (int32_t) gen8->defaultWindowHeight;
-        }
-        runner->usingAppSurface = true;
-    }
-
-    int32_t gameW = runner->applicationWidth;
-    int32_t gameH = runner->applicationHeight;
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    Runner_drawPre(runner, winW, winH);
-    Runner_beginFrame(runner, gameW, gameH, winW, winH, winW, winH);
-    Runner_updateMousePosition(runner, winW, winH, 0.0, 0.0);
-    Runner_drawViews(runner, gameW, gameH, false);
-    runner->renderer->vtable->endFrameInit(runner->renderer);
-    Runner_drawPost(runner, winW, winH);
-    runner->renderer->vtable->endFrameEnd(runner->renderer);
-    Runner_drawGUI(runner, winW, winH, gameW, gameH);
-    Runner_handlePendingRoomChange(runner);
-
-#ifdef PLATFORM_ANDROID
-    if (ctx->usesHostWindow) eglSwapBuffers(ctx->eglDisplay, ctx->eglSurface);
-#endif
-}
-
-BUTTERSCOTCH_API const uint8_t* butterscotch_getFramebuffer(ButterscotchContext* ctx) {
-    if (ctx == NULL) return NULL;
-    libMakeContextCurrent(ctx);
-    int w = ctx->winW;
-    int h = ctx->winH;
-    if (ctx->rawBuffer == NULL || ctx->fbW != w || ctx->fbH != h) {
-        free(ctx->rawBuffer);
-        free(ctx->fbBuffer);
-        ctx->rawBuffer = malloc((size_t) w * h * 4);
-        ctx->fbBuffer = malloc((size_t) w * h * 4);
-        ctx->fbW = w;
-        ctx->fbH = h;
-    }
-
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-    glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, ctx->rawBuffer);
-
-    // GL framebuffers are bottom-up; TeiaHub expects top-down scanline order.
-    size_t row = (size_t) w * 4;
-    for (int y = 0; y < h; y++) {
-        memcpy(ctx->fbBuffer + (size_t) (h - 1 - y) * row,
-               ctx->rawBuffer + (size_t) y * row,
-               row);
-    }
-    return ctx->fbBuffer;
-}
-
-BUTTERSCOTCH_API int32_t butterscotch_getFramebufferWidth(ButterscotchContext* ctx) {
-    if (ctx == NULL) return 0;
-    return ctx->winW;
-}
-
-BUTTERSCOTCH_API int32_t butterscotch_getFramebufferHeight(ButterscotchContext* ctx) {
-    if (ctx == NULL) return 0;
-    return ctx->winH;
-}
-
-BUTTERSCOTCH_API int32_t butterscotch_getRoomSpeed(ButterscotchContext* ctx) {
-    if (ctx == NULL) return 30;
-    if (ctx->runner->currentRoom == NULL) return 30;
-    return ctx->runner->currentRoom->speed;
-}
-
-BUTTERSCOTCH_API bool butterscotch_shouldExit(ButterscotchContext* ctx) {
-    if (ctx == NULL) return true;
-    return ctx->runner->shouldExit;
-}
-
-BUTTERSCOTCH_API void butterscotch_keyDown(ButterscotchContext* ctx, int32_t keyCode) {
-    if (ctx == NULL) return;
-    RunnerKeyboard_onKeyDown(ctx->runner->keyboard, keyCode);
-}
-
-BUTTERSCOTCH_API void butterscotch_keyUp(ButterscotchContext* ctx, int32_t keyCode) {
-    if (ctx == NULL) return;
-    RunnerKeyboard_onKeyUp(ctx->runner->keyboard, keyCode);
-}
-
-// ===[ CallbackAudioSystem ]===
+// ===[ CallbackAudioSystem (host-provided audio) ]===
+// Defined early so the game (re)load helper can reuse it across game_change.
 
 typedef struct {
     AudioSystem base;
@@ -554,6 +297,462 @@ static AudioSystemVtable callbackVtable = {
     .destroyStream = callbackDestroyStream,
 };
 
+static AudioSystem* libCreateAudio(ButterscotchContext* ctx, DataWin* dataWin) {
+    if (ctx->audioIsHost) {
+        CallbackAudioSystem* cb = calloc(1, sizeof(CallbackAudioSystem));
+        cb->base.vtable = &callbackVtable;
+        cb->callbacks = ctx->hostAudioCallbacks;
+        return (AudioSystem*) cb;
+    }
+    AudioSystem* audioSystem = (AudioSystem*) MaAudioSystem_create(dataWin);
+    if (audioSystem == NULL) {
+        fprintf(stderr, "Butterscotch: MaAudioSystem_create returned NULL; falling back to silent audio\n");
+        audioSystem = (AudioSystem*) NoopAudioSystem_create();
+    }
+    return audioSystem;
+}
+
+static DataWinParserOptions libParseOptions(void) {
+    DataWinParserOptions options = {0};
+    options.parseGen8 = true;
+    options.parseOptn = true;
+    options.parseLang = true;
+    options.parseExtn = true;
+    options.parseSond = true;
+    options.parseAgrp = true;
+    options.parseSprt = true;
+    options.parseBgnd = true;
+    options.parsePath = true;
+    options.parseScpt = true;
+    options.parseGlob = true;
+    options.parseShdr = true;
+    options.parseFont = true;
+    options.parseTmln = true;
+    options.parseObjt = true;
+    options.parseRoom = true;
+    options.parseTpag = true;
+    options.parseCode = true;
+    options.parseVari = true;
+    options.parseFunc = true;
+    options.parseStrg = true;
+    options.parseTxtr = true;
+    options.parseAudo = true;
+    options.skipLoadingPreciseMasksForNonPreciseSprites = true;
+    options.loadType = DATAWINLOADTYPE_LOAD_IN_MEMORY_AHEAD_OF_TIME;
+    options.lazyLoadRooms = false;
+    options.eagerlyLoadedRooms = NULL;
+    return options;
+}
+
+// Resize the GL/EGL surface to match the (possibly new) game dimensions so that
+// framebuffer readback stays consistent. For host-owned windows (Android native window)
+// the host resizes the surface itself, so we only manage our own offscreen surfaces.
+static void libResizeContext(ButterscotchContext* ctx, int32_t w, int32_t h) {
+    if (w <= 0 || h <= 0) return;
+    ctx->winW = w;
+    ctx->winH = h;
+#ifndef PLATFORM_ANDROID
+    if (ctx->window) glfwSetWindowSize(ctx->window, w, h);
+#else
+    if (ctx->eglDisplay != EGL_NO_DISPLAY && !ctx->usesHostWindow) {
+        libMakeContextCurrent(ctx);
+        if (ctx->eglSurface != EGL_NO_SURFACE) eglDestroySurface(ctx->eglDisplay, ctx->eglSurface);
+        EGLint pbAttr[] = { EGL_WIDTH, w, EGL_HEIGHT, h, EGL_NONE };
+        ctx->eglSurface = eglCreatePbufferSurface(ctx->eglDisplay, ctx->eglConfig, pbAttr);
+        if (ctx->eglSurface == EGL_NO_SURFACE) return;
+        eglMakeCurrent(ctx->eglDisplay, ctx->eglSurface, ctx->eglSurface, ctx->eglContext);
+    }
+#endif
+}
+
+// Load (or reload, on game_change) a data.win into the context. The GL context and
+// audio-callback configuration are preserved; the previous game's resources are freed.
+static bool libLoadGame(ButterscotchContext* ctx, const char* dataWinPath, const char* savesPath) {
+    libMakeContextCurrent(ctx);
+
+    DataWin* dataWin = DataWin_parse(dataWinPath, libParseOptions());
+    if (dataWin == NULL) {
+        fprintf(stderr, "Butterscotch: Failed to parse data.win for game_change: %s\n", dataWinPath);
+        return false;
+    }
+
+    VMContext* vm = VM_create(dataWin);
+
+    char* bundleDir = dirnameOf(dataWinPath);
+    FileSystem* fileSystem = (FileSystem*) OverlayFileSystem_create(bundleDir, savesPath ? savesPath : bundleDir);
+    free(bundleDir);
+
+    Renderer* renderer = GLRenderer_create();
+    ((GLRenderer*) renderer)->hostFramebuffer = 0; // render into the (offscreen / host) default framebuffer
+    ((GLRenderer*) renderer)->isGLES = ctx->isGLES;
+
+    AudioSystem* audioSystem = libCreateAudio(ctx, dataWin);
+
+    Runner* runner = Runner_create(dataWin, vm, renderer, fileSystem, audioSystem);
+    runner->getWindowSize = libGetWindowSize;
+    runner->setWindowTitle = libSetWindowTitle;
+    runner->windowHasFocus = NULL;
+
+    // Tear down the previous game's state. The GL context itself stays alive.
+    if (ctx->runner != NULL) {
+        ctx->runner->audioSystem->vtable->destroy(ctx->runner->audioSystem);
+        ctx->renderer->vtable->destroy(ctx->renderer);
+        Runner_free(ctx->runner);
+        OverlayFileSystem_destroy((OverlayFileSystem*) ctx->fileSystem);
+        VM_free(ctx->vm);
+        DataWin_free(ctx->dataWin);
+    }
+
+    ctx->dataWin = dataWin;
+    ctx->vm = vm;
+    ctx->renderer = renderer;
+    ctx->audioSystem = audioSystem;
+    ctx->fileSystem = fileSystem;
+    ctx->runner = runner;
+
+    libResizeContext(ctx, (int32_t) dataWin->gen8.defaultWindowWidth, (int32_t) dataWin->gen8.defaultWindowHeight);
+
+    Runner_initFirstRoom(runner);
+    fprintf(stderr, "Butterscotch: Loaded \"%s\" (%d) [WAD Version %u]\n",
+        dataWin->gen8.name, dataWin->gen8.gameID, dataWin->gen8.wadVersion);
+    return true;
+}
+
+// Minimal parse to discover the default window size for GL context creation.
+static bool libProbeSize(const char* dataWinPath, int32_t* outW, int32_t* outH) {
+    DataWinParserOptions options = {0};
+    options.parseGen8 = true;
+    DataWin* dataWin = DataWin_parse(dataWinPath, options);
+    if (dataWin == NULL) return false;
+    *outW = (int32_t) dataWin->gen8.defaultWindowWidth;
+    *outH = (int32_t) dataWin->gen8.defaultWindowHeight;
+    DataWin_free(dataWin);
+    return true;
+}
+
+// ===[ Lifecycle ]===
+
+static ButterscotchContext* createCommon(const char* dataWinPath, const char* savesPath, void* nativeWindow) {
+    if (dataWinPath == NULL) return NULL;
+
+    ButterscotchContext* ctx = safeMalloc(sizeof(ButterscotchContext));
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->dataWinPath = safeStrdup(dataWinPath);
+    ctx->savesPath = savesPath ? safeStrdup(savesPath) : NULL;
+
+    // Probe the default window size so we can size the GL context before parsing the
+    // full data.win (libLoadGame does the full, heavy parse).
+    if (!libProbeSize(dataWinPath, &ctx->winW, &ctx->winH)) {
+        fprintf(stderr, "Butterscotch: Failed to parse data.win\n");
+        free(ctx->dataWinPath);
+        free(ctx->savesPath);
+        free(ctx);
+        return NULL;
+    }
+
+    fprintf(stderr, "Butterscotch: Loading %s...\n", dataWinPath);
+
+    // GL context must be current before GLRenderer_create (it compiles shaders / creates GL objects).
+    if (!libEnsureContext(ctx, ctx->winW, ctx->winH, nativeWindow)) {
+        fprintf(stderr, "Butterscotch: Failed to create GL context\n");
+        free(ctx->dataWinPath);
+        free(ctx->savesPath);
+        free(ctx);
+        return NULL;
+    }
+
+    if (!libLoadGame(ctx, dataWinPath, ctx->savesPath)) {
+        fprintf(stderr, "Butterscotch: Failed to load game\n");
+#ifndef PLATFORM_ANDROID
+        if (ctx->window) {
+            glfwDestroyWindow(ctx->window);
+            glfwTerminate();
+        }
+#else
+        if (ctx->eglDisplay != EGL_NO_DISPLAY) {
+            if (ctx->eglSurface != EGL_NO_SURFACE) eglDestroySurface(ctx->eglDisplay, ctx->eglSurface);
+            if (ctx->eglContext != EGL_NO_CONTEXT) eglDestroyContext(ctx->eglDisplay, ctx->eglContext);
+            eglTerminate(ctx->eglDisplay);
+        }
+#endif
+        free(ctx->dataWinPath);
+        free(ctx->savesPath);
+        free(ctx);
+        return NULL;
+    }
+
+    // Release the GL context from the main thread so the game thread can claim it.
+    // On Wayland/GLFW, a context tied to one thread can block make-current on another.
+#ifndef PLATFORM_ANDROID
+    glfwMakeContextCurrent(NULL);
+#endif
+
+    fprintf(stderr, "Butterscotch: Initialized successfully\n");
+    return ctx;
+}
+
+BUTTERSCOTCH_API ButterscotchContext* butterscotch_create(const char* dataWinPath) {
+    return createCommon(dataWinPath, NULL, NULL);
+}
+
+BUTTERSCOTCH_API ButterscotchContext* butterscotch_createWithSaves(const char* dataWinPath, const char* savesPath) {
+    return createCommon(dataWinPath, savesPath, NULL);
+}
+
+BUTTERSCOTCH_API ButterscotchContext* butterscotch_create_with_native_window(const char* dataWinPath, const char* savesPath, void* nativeWindow) {
+    return createCommon(dataWinPath, savesPath, nativeWindow);
+}
+
+BUTTERSCOTCH_API void butterscotch_free(ButterscotchContext* ctx) {
+    if (ctx == NULL) return;
+
+    ctx->audioSystem->vtable->destroy(ctx->audioSystem);
+    ctx->renderer->vtable->destroy(ctx->renderer);
+    Runner_free(ctx->runner);
+    VM_free(ctx->vm);
+    DataWin_free(ctx->dataWin);
+    OverlayFileSystem_destroy((OverlayFileSystem*) ctx->fileSystem);
+
+#ifndef PLATFORM_ANDROID
+    if (ctx->window) {
+        glfwMakeContextCurrent(ctx->window);
+        glfwDestroyWindow(ctx->window);
+        glfwTerminate();
+    }
+#else
+    if (ctx->eglDisplay != EGL_NO_DISPLAY) {
+        eglMakeCurrent(ctx->eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        if (ctx->eglSurface != EGL_NO_SURFACE) eglDestroySurface(ctx->eglDisplay, ctx->eglSurface);
+        if (ctx->eglContext != EGL_NO_CONTEXT) eglDestroyContext(ctx->eglDisplay, ctx->eglContext);
+        eglTerminate(ctx->eglDisplay);
+    }
+#endif
+
+    free(ctx->fbBuffer);
+    free(ctx->rawBuffer);
+    free(ctx->dataWinPath);
+    free(ctx->savesPath);
+    free(ctx);
+}
+
+BUTTERSCOTCH_API void butterscotch_resize(ButterscotchContext* ctx, int32_t width, int32_t height) {
+    if (ctx == NULL || width <= 0 || height <= 0) return;
+    ctx->winW = width;
+    ctx->winH = height;
+#ifndef PLATFORM_ANDROID
+    if (ctx->window) glfwSetWindowSize(ctx->window, width, height);
+#endif
+    // Android host window surfaces resize with the ANativeWindow automatically.
+}
+
+BUTTERSCOTCH_API void butterscotch_beginFrame(ButterscotchContext* ctx) {
+    if (ctx == NULL) return;
+    RunnerKeyboard_beginFrame(ctx->runner->keyboard);
+}
+
+// Tokenize a raw launch-parameters string (like the desktop runner's extractRunnerArguments).
+static char** libExtractRunnerArguments(const char* raw, int* outCount) {
+    char* copy = safeStrdup(raw);
+    char* saveptr = NULL;
+    char** arr = NULL;
+    int count = 0;
+    char* token = strtok_r(copy, " \t\r\n", &saveptr);
+    while (token != NULL) {
+        arr = realloc(arr, sizeof(char*) * (size_t) (count + 1));
+        arr[count++] = safeStrdup(token);
+        token = strtok_r(NULL, " \t\r\n", &saveptr);
+    }
+    free(copy);
+    *outCount = count;
+    return arr;
+}
+
+// Handle a pending game_change request (set by the GML game_change builtin). Rebuilds the
+// runner with a new data.win, reusing the existing GL context and audio configuration.
+static void libHandleGameChange(ButterscotchContext* ctx) {
+    char* nextWorkingDirectory = ctx->runner->pendingWorkingDirectory;
+    char* nextLaunchParameters = ctx->runner->pendingLaunchParameters;
+    ctx->runner->pendingWorkingDirectory = NULL;
+    ctx->runner->pendingLaunchParameters = NULL;
+
+    int argCount = 0;
+    char** newArguments = libExtractRunnerArguments(nextLaunchParameters, &argCount);
+
+    // Extract the data.win filename from the "-game <file>" entry in the launch parameters.
+    char* dataWinFilename = NULL;
+    for (int i = 0; i < argCount - 1; i++) {
+        if (strcmp(newArguments[i], "-game") == 0) {
+            dataWinFilename = newArguments[i + 1];
+            break;
+        }
+    }
+
+    if (dataWinFilename == NULL) {
+        fprintf(stderr, "Butterscotch: game_change launch parameters '%s' did not contain a '-game <file>' entry! Ignoring.\n", nextLaunchParameters);
+        for (int i = 0; i < argCount; i++) free(newArguments[i]);
+        free(newArguments);
+        free(nextWorkingDirectory);
+        free(nextLaunchParameters);
+        return;
+    }
+
+    // The pendingWorkingDirectory has a leading slash (e.g. "/chapter3"). Resolve the new
+    // data.win path relative to the current one's parent directory.
+    char* parentDir = safeStrdup(ctx->dataWinPath);
+    {
+        char* lastSlash = strrchr(parentDir, '/');
+        char* lastBackslash = strrchr(parentDir, '\\');
+        char* sep = (lastSlash > lastBackslash) ? lastSlash : lastBackslash;
+        if (sep != NULL) {
+            *sep = '\0';
+        } else {
+            parentDir[0] = '.';
+            parentDir[1] = '\0';
+        }
+    }
+
+    size_t newPathLen = strlen(parentDir) + strlen(nextWorkingDirectory) + 1 + strlen(dataWinFilename) + 1;
+    char* newPath = (char*) safeMalloc(newPathLen);
+    snprintf(newPath, newPathLen, "%s%s/%s", parentDir, nextWorkingDirectory, dataWinFilename);
+    free(parentDir);
+
+    // Build the new game args: keep a placeholder argv[0], then append the parsed launch args.
+    char** newGameArgs = (char**) safeMalloc(sizeof(char*) * (size_t) (argCount + 1));
+    newGameArgs[0] = safeStrdup(ctx->dataWinPath);
+    for (int i = 0; i < argCount; i++) newGameArgs[i + 1] = safeStrdup(newArguments[i]);
+
+    free(ctx->dataWinPath);
+    ctx->dataWinPath = newPath;
+
+    if (!libLoadGame(ctx, newPath, ctx->savesPath)) {
+        fprintf(stderr, "Butterscotch: game_change failed to load %s; shutting down.\n", newPath);
+        ctx->runner->shouldExit = true;
+    } else {
+        Runner_setGameArgs(ctx->runner, newGameArgs, argCount + 1);
+    }
+
+    for (int i = 0; i <= argCount; i++) free(newGameArgs[i]);
+    free(newGameArgs);
+    for (int i = 0; i < argCount; i++) free(newArguments[i]);
+    free(newArguments);
+    free(nextWorkingDirectory);
+    free(nextLaunchParameters);
+}
+
+BUTTERSCOTCH_API void butterscotch_step(ButterscotchContext* ctx) {
+    if (ctx == NULL) return;
+    libMakeContextCurrent(ctx);
+    if (ctx->runner->pendingWorkingDirectory != NULL && ctx->runner->pendingLaunchParameters != NULL) {
+        libHandleGameChange(ctx);
+        if (ctx->runner->shouldExit) return;
+    }
+    Runner_step(ctx->runner);
+    ctx->audioSystem->vtable->update(ctx->audioSystem, 1.0f / 30.0f);
+}
+
+BUTTERSCOTCH_API void butterscotch_draw(ButterscotchContext* ctx) {
+    if (ctx == NULL) return;
+    libMakeContextCurrent(ctx);
+
+    Runner* runner = ctx->runner;
+    int32_t winW = ctx->winW;
+    int32_t winH = ctx->winH;
+    Gen8* gen8 = &runner->dataWin->gen8;
+
+    if (!runner->appSurfaceEnabled) {
+        runner->applicationWidth = winW;
+        runner->applicationHeight = winH;
+        runner->usingAppSurface = false;
+    } else {
+        if (runner->applicationWidth <= 0 || runner->applicationHeight <= 0) {
+            runner->applicationWidth = (int32_t) gen8->defaultWindowWidth;
+            runner->applicationHeight = (int32_t) gen8->defaultWindowHeight;
+        }
+        runner->usingAppSurface = true;
+    }
+
+    int32_t gameW = runner->applicationWidth;
+    int32_t gameH = runner->applicationHeight;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    Runner_drawPre(runner, winW, winH);
+    Runner_beginFrame(runner, gameW, gameH, winW, winH, winW, winH);
+    Runner_updateMousePosition(runner, winW, winH, 0.0, 0.0);
+    Runner_drawViews(runner, gameW, gameH, false);
+    runner->renderer->vtable->endFrameInit(runner->renderer);
+    Runner_drawPost(runner, winW, winH);
+    runner->renderer->vtable->endFrameEnd(runner->renderer);
+    Runner_drawGUI(runner, winW, winH, gameW, gameH);
+    Runner_handlePendingRoomChange(runner);
+
+#ifdef PLATFORM_ANDROID
+    if (ctx->usesHostWindow) eglSwapBuffers(ctx->eglDisplay, ctx->eglSurface);
+#endif
+}
+
+BUTTERSCOTCH_API const uint8_t* butterscotch_getFramebuffer(ButterscotchContext* ctx) {
+    if (ctx == NULL) return NULL;
+    libMakeContextCurrent(ctx);
+    int w = ctx->winW;
+    int h = ctx->winH;
+    if (ctx->rawBuffer == NULL || ctx->fbW != w || ctx->fbH != h) {
+        free(ctx->rawBuffer);
+        free(ctx->fbBuffer);
+        ctx->rawBuffer = malloc((size_t) w * h * 4);
+        ctx->fbBuffer = malloc((size_t) w * h * 4);
+        ctx->fbW = w;
+        ctx->fbH = h;
+    }
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, ctx->rawBuffer);
+
+    // GL framebuffers are bottom-up; TeiaHub expects top-down scanline order.
+    size_t row = (size_t) w * 4;
+    for (int y = 0; y < h; y++) {
+        memcpy(ctx->fbBuffer + (size_t) (h - 1 - y) * row,
+               ctx->rawBuffer + (size_t) y * row,
+               row);
+    }
+    return ctx->fbBuffer;
+}
+
+BUTTERSCOTCH_API int32_t butterscotch_getFramebufferWidth(ButterscotchContext* ctx) {
+    if (ctx == NULL) return 0;
+    return ctx->winW;
+}
+
+BUTTERSCOTCH_API int32_t butterscotch_getFramebufferHeight(ButterscotchContext* ctx) {
+    if (ctx == NULL) return 0;
+    return ctx->winH;
+}
+
+BUTTERSCOTCH_API int32_t butterscotch_getRoomSpeed(ButterscotchContext* ctx) {
+    if (ctx == NULL) return 30;
+    if (ctx->runner->currentRoom == NULL) return 30;
+    return ctx->runner->currentRoom->speed;
+}
+
+BUTTERSCOTCH_API bool butterscotch_shouldExit(ButterscotchContext* ctx) {
+    if (ctx == NULL) return true;
+    return ctx->runner->shouldExit;
+}
+
+BUTTERSCOTCH_API void butterscotch_keyDown(ButterscotchContext* ctx, int32_t keyCode) {
+    if (ctx == NULL) return;
+    RunnerKeyboard_onKeyDown(ctx->runner->keyboard, keyCode);
+}
+
+BUTTERSCOTCH_API void butterscotch_keyUp(ButterscotchContext* ctx, int32_t keyCode) {
+    if (ctx == NULL) return;
+    RunnerKeyboard_onKeyUp(ctx->runner->keyboard, keyCode);
+}
+
+// ===[ CallbackAudioSystem ]===
+
 BUTTERSCOTCH_API void butterscotch_setAudioCallbacks(ButterscotchContext* ctx, ButterscotchAudioCallbacks* callbacks) {
     if (ctx == NULL || callbacks == NULL) return;
 
@@ -565,6 +764,10 @@ BUTTERSCOTCH_API void butterscotch_setAudioCallbacks(ButterscotchContext* ctx, B
 
     ctx->audioSystem = (AudioSystem*) cb;
     ctx->runner->audioSystem = ctx->audioSystem;
+
+    // Remember the host audio config so game_change can rebuild it for the new game.
+    ctx->audioIsHost = true;
+    ctx->hostAudioCallbacks = *callbacks;
 }
 
 // ===[ Sound Info API ]===
