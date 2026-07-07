@@ -126,14 +126,7 @@ static void libMakeContextCurrent(ButterscotchContext* ctx) {
     if (ctx->eglDisplay != EGL_NO_DISPLAY)
         eglMakeCurrent(ctx->eglDisplay, ctx->eglSurface, ctx->eglSurface, ctx->eglContext);
 #else
-    if (ctx->window) {
-        int result = glfwMakeContextCurrent(ctx->window);
-        if (!result) {
-            const char* desc;
-            int code = glfwGetError(&desc);
-            fprintf(stderr, "GL: glfwMakeContextCurrent FAILED (0x%x: %s)\n", code, desc ? desc : "unknown");
-        }
-    }
+    if (ctx->window) glfwMakeContextCurrent(ctx->window);
 #endif
 }
 
