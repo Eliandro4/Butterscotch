@@ -36,6 +36,7 @@ struct ButterscotchContext {
     uint8_t* rawBuffer; // GL readback (bottom-up) before flip
     int fbW;
     int fbH;
+    bool isGLES;
 #ifndef PLATFORM_ANDROID
     GLFWwindow* window;
 #else
@@ -78,9 +79,29 @@ static bool libEnsureContext(ButterscotchContext* ctx, int w, int h, void* nativ
     }
     if (ctx->eglSurface == EGL_NO_SURFACE) return false;
     if (!eglMakeCurrent(ctx->eglDisplay, ctx->eglSurface, ctx->eglSurface, ctx->eglContext)) return false;
+    ctx->isGLES = true;
     return true;
 }
 #else
+static int libInitGlad(void) {
+    glGetString = (PFNGLGETSTRINGPROC)(GLADloadproc)glfwGetProcAddress("glGetString");
+    const char *version;
+    if (glGetString) {
+        version = (const char*)glGetString(GL_VERSION);
+    } else {
+        return 0;
+    }
+    if (version && strstr(version, "OpenGL ES")) {
+        if (!gladLoadGLES2Loader((GLADloadproc) glfwGetProcAddress))
+            return 0;
+        return 2;
+    } else {
+        if (!gladLoadGLLoader((GLADloadproc) glfwGetProcAddress))
+            return 0;
+        return 1;
+    }
+}
+
 static bool libEnsureContext(ButterscotchContext* ctx, int w, int h, MAYBE_UNUSED void* nativeWindow) {
     if (!glfwInit()) return false;
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
@@ -90,7 +111,9 @@ static bool libEnsureContext(ButterscotchContext* ctx, int w, int h, MAYBE_UNUSE
     ctx->window = glfwCreateWindow(w, h, "Butterscotch (embedded)", NULL, NULL);
     if (!ctx->window) return false;
     glfwMakeContextCurrent(ctx->window);
-    if (!gladLoadGLLoader((GLADloadproc) glfwGetProcAddress)) return false;
+    int glad_ret = libInitGlad();
+    if (glad_ret == 0) return false;
+    ctx->isGLES = (glad_ret == 2);
     return true;
 }
 #endif
@@ -103,7 +126,14 @@ static void libMakeContextCurrent(ButterscotchContext* ctx) {
     if (ctx->eglDisplay != EGL_NO_DISPLAY)
         eglMakeCurrent(ctx->eglDisplay, ctx->eglSurface, ctx->eglSurface, ctx->eglContext);
 #else
-    if (ctx->window) glfwMakeContextCurrent(ctx->window);
+    if (ctx->window) {
+        int result = glfwMakeContextCurrent(ctx->window);
+        if (!result) {
+            const char* desc;
+            int code = glfwGetError(&desc);
+            fprintf(stderr, "GL: glfwMakeContextCurrent FAILED (0x%x: %s)\n", code, desc ? desc : "unknown");
+        }
+    }
 #endif
 }
 
@@ -199,6 +229,7 @@ static ButterscotchContext* createCommon(const char* dataWinPath, const char* sa
 
     Renderer* renderer = GLRenderer_create();
     ((GLRenderer*) renderer)->hostFramebuffer = 0; // render into the (offscreen / host) default framebuffer
+    ((GLRenderer*) renderer)->isGLES = ctx->isGLES;
 
     AudioSystem* audioSystem = (AudioSystem*) MaAudioSystem_create(dataWin);
     if (audioSystem == NULL) {
@@ -212,6 +243,10 @@ static ButterscotchContext* createCommon(const char* dataWinPath, const char* sa
     runner->windowHasFocus = NULL;
 
     Runner_initFirstRoom(runner);
+
+    // Release the GL context from the main thread so the game thread can claim it.
+    // On Wayland/GLFW, a context tied to one thread can block make-current on another.
+    glfwMakeContextCurrent(NULL);
 
     ctx->dataWin = dataWin;
     ctx->vm = vm;

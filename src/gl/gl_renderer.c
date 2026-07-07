@@ -1859,6 +1859,11 @@ static int32_t glCreateSurface(Renderer* renderer, int32_t width, int32_t height
     GLRenderer* gl = (GLRenderer*) renderer;
     flushBatch(gl);
 
+    const char* ver = (const char*) glGetString(GL_VERSION);
+    const char* vendor = (const char*) glGetString(GL_VENDOR);
+    const char* renderer_str = (const char*) glGetString(GL_RENDERER);
+    fprintf(stderr, "GL: glCreateSurface(%dx%d) context=%s vendor=%s renderer=%s\n", width, height, ver ? ver : "NULL", vendor ? vendor : "NULL", renderer_str ? renderer_str : "NULL");
+
     // Save the current FBO binding so creating a surface doesn't change the active render target.
     GLint prevBinding = 0;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevBinding);
@@ -1866,6 +1871,11 @@ static int32_t glCreateSurface(Renderer* renderer, int32_t width, int32_t height
     uint32_t surfaceIndex = GLCommon_findOrAllocateSurfaceSlot(&gl->surfaces, &gl->surfaceTexture, &gl->surfaceWidth, &gl->surfaceHeight, &gl->surfaceCount);
 
     glGenFramebuffers(1, &gl->surfaces[surfaceIndex]);
+
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR || gl->surfaces[surfaceIndex] == 0) {
+        fprintf(stderr, "GL: glGenFramebuffers FAILED for surface %u (error=0x%x, fbo=%u)\n", surfaceIndex, (unsigned)err, (unsigned)gl->surfaces[surfaceIndex]);
+    }
 
     glGenTextures(1, &gl->surfaceTexture[surfaceIndex]);
     glBindTexture(GL_TEXTURE_2D, gl->surfaceTexture[surfaceIndex]);
