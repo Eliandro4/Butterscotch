@@ -729,8 +729,7 @@ elseif(PLATFORM STREQUAL "lib")
     # Position-independent code (required for shared libraries)
     set_target_properties(butterscotch PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-    # Hide all symbols by default, export only BUTTERSCOTCH_API functions
-    target_compile_options(butterscotch PRIVATE -fvisibility=hidden)
+    # Export all symbols (the host embeds this library and may need internals such as stb_ds).
 else()
     message(FATAL_ERROR "Unknown platform! ${PLATFORM}")
 endif()
