@@ -95,6 +95,18 @@ static bool libEnsureContext(ButterscotchContext* ctx, int w, int h, MAYBE_UNUSE
 }
 #endif
 
+// Make the GL/EGL context current on the calling thread. The host (e.g. TeiaHub) typically
+// creates the context on one thread but drives step/draw on a separate game thread, so we must
+// ensure the context is current here or GL calls (including FBO creation during Runner_step) fail.
+static void libMakeContextCurrent(ButterscotchContext* ctx) {
+#ifdef PLATFORM_ANDROID
+    if (ctx->eglDisplay != EGL_NO_DISPLAY)
+        eglMakeCurrent(ctx->eglDisplay, ctx->eglSurface, ctx->eglSurface, ctx->eglContext);
+#else
+    if (ctx->window) glfwMakeContextCurrent(ctx->window);
+#endif
+}
+
 // ===[ Helpers ]===
 
 static char* dirnameOf(const char* path) {
@@ -270,12 +282,14 @@ BUTTERSCOTCH_API void butterscotch_beginFrame(ButterscotchContext* ctx) {
 
 BUTTERSCOTCH_API void butterscotch_step(ButterscotchContext* ctx) {
     if (ctx == NULL) return;
+    libMakeContextCurrent(ctx);
     Runner_step(ctx->runner);
     ctx->audioSystem->vtable->update(ctx->audioSystem, 1.0f / 30.0f);
 }
 
 BUTTERSCOTCH_API void butterscotch_draw(ButterscotchContext* ctx) {
     if (ctx == NULL) return;
+    libMakeContextCurrent(ctx);
 
     Runner* runner = ctx->runner;
     int32_t winW = ctx->winW;
@@ -317,6 +331,7 @@ BUTTERSCOTCH_API void butterscotch_draw(ButterscotchContext* ctx) {
 
 BUTTERSCOTCH_API const uint8_t* butterscotch_getFramebuffer(ButterscotchContext* ctx) {
     if (ctx == NULL) return NULL;
+    libMakeContextCurrent(ctx);
     int w = ctx->winW;
     int h = ctx->winH;
     if (ctx->rawBuffer == NULL || ctx->fbW != w || ctx->fbH != h) {
