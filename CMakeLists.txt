@@ -6,6 +6,7 @@ endif()
 
 project(butterscotch C)
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 if(MSVC)
@@ -102,7 +103,7 @@ endif()
 # Platform specific files builds
 file(GLOB PLATFORM_SOURCES src/${PLATFORM}/*.c)
 
-if(PLATFORM STREQUAL "android")
+if(PLATFORM STREQUAL "android" OR PLATFORM STREQUAL "lib")
     add_library(butterscotch SHARED ${SOURCES} ${PLATFORM_SOURCES} ${AUDIO_SOURCES})
 else()
     add_executable(butterscotch ${SOURCES} ${PLATFORM_SOURCES} ${AUDIO_SOURCES})
@@ -684,6 +685,52 @@ elseif(PLATFORM STREQUAL "ps3")
     # mojoal calls SDL atomics/threads, so SDL2 must link after it (static link order)
     target_link_libraries(mojoal PUBLIC ${SDL2_LIBRARIES})
     target_link_libraries(butterscotch PRIVATE ${SDL2_LIBRARIES} m gcm_sys rsx sysutil io audio rt lv2 io audio bzip2 stb_ds sha1 ps3gl mojoal stb_vorbis)
+elseif(PLATFORM STREQUAL "lib")
+    # Shared-library embedding platform (used by TeiaHub). Builds a .so/.dll using the GLES/GL
+    # renderer so the host can own the drawing surface and drive frames via the butterscotch_* API.
+    # The target itself is already created above (shared lib for lib/android platforms).
+
+    # GLES/GL renderer sources
+    file(GLOB GL_SOURCES src/gl/*.c src/gl_common/*.c src/image/*.c)
+    target_sources(butterscotch PRIVATE ${GL_SOURCES})
+    target_include_directories(butterscotch PRIVATE ${CMAKE_SOURCE_DIR}/src/gl
+                                                    ${CMAKE_SOURCE_DIR}/src/gl_common
+                                                    ${CMAKE_SOURCE_DIR}/src/image)
+
+    # stb_image / stb_vorbis / miniaudio
+    target_include_directories(butterscotch PUBLIC vendor/stb/image)
+    target_include_directories(butterscotch PUBLIC vendor/stb/vorbis)
+    target_include_directories(butterscotch PUBLIC vendor/miniaudio)
+    target_include_directories(butterscotch PUBLIC src/audio/miniaudio)
+    add_compile_definitions(USE_MINIAUDIO ENABLE_MODERN_GL)
+
+    if(ANDROID)
+        add_compile_definitions(ENABLE_GLES PLATFORM_ANDROID)
+        target_link_libraries(butterscotch PRIVATE log GLESv3 EGL OpenSLES bzip2 stb_ds sha1 stb_vorbis)
+    else()
+        # Offscreen GL context via a hidden GLFW window (reuses GLAD + glfw3)
+        add_library(glad STATIC vendor/glad/src/glad.c)
+        set_target_properties(glad PROPERTIES POSITION_INDEPENDENT_CODE ON)
+        target_include_directories(glad PUBLIC vendor/glad/include)
+
+        if(WIN32)
+            find_package(glfw3 REQUIRED)
+            target_include_directories(butterscotch PRIVATE ${GLFW3_INCLUDE_DIRS})
+            target_link_libraries(butterscotch PRIVATE glad glfw3 opengl32 gdi32 winmm bzip2 stb_ds sha1 stb_vorbis)
+        else()
+            find_package(PkgConfig REQUIRED)
+            pkg_check_modules(GLFW3 REQUIRED glfw3)
+            target_include_directories(butterscotch PRIVATE ${GLFW3_INCLUDE_DIRS})
+            target_link_directories(butterscotch PRIVATE ${GLFW3_LIBRARY_DIRS})
+            target_link_libraries(butterscotch PRIVATE glad ${GLFW3_LIBRARIES} bzip2 stb_ds sha1 stb_vorbis m pthread dl)
+        endif()
+    endif()
+
+    # Position-independent code (required for shared libraries)
+    set_target_properties(butterscotch PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+    # Hide all symbols by default, export only BUTTERSCOTCH_API functions
+    target_compile_options(butterscotch PRIVATE -fvisibility=hidden)
 else()
     message(FATAL_ERROR "Unknown platform! ${PLATFORM}")
 endif()
