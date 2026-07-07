@@ -612,7 +612,11 @@ static void glBeginFrame(Renderer* renderer, int32_t gameW, int32_t gameH, int32
 
     // Bind the application_surface
     int32_t appId = gl->base.runner->applicationSurfaceId;
-    glBindFramebuffer(GL_FRAMEBUFFER, gl->surfaces[appId]);
+    if (appId >= 0 && (uint32_t) appId < gl->surfaceCount && gl->surfaces[appId] != 0) {
+        glBindFramebuffer(GL_FRAMEBUFFER, gl->surfaces[appId]);
+    } else {
+        glBindFramebuffer(GL_FRAMEBUFFER, gl->hostFramebuffer);
+    }
     glViewport(0, 0, gameW, gameH);
     gl->base.CPortX = 0;
     gl->base.CPortY = 0;
@@ -678,13 +682,11 @@ static void glBeginGUI(Renderer* renderer, int32_t guiW, int32_t guiH, int32_t p
     gl->batchCount = 0;
     gl->currentTextureId = 0;
 
-    if (targetSurfaceId == RENDER_TARGET_HOST_FRAMEBUFFER) {
+    if (targetSurfaceId == RENDER_TARGET_HOST_FRAMEBUFFER || targetSurfaceId < 0 || (uint32_t) targetSurfaceId >= gl->surfaceCount || gl->surfaces[targetSurfaceId] == 0) {
         glBindFramebuffer(GL_FRAMEBUFFER, gl->hostFramebuffer);
         glViewport(0, 0, portW, portH);
         glScissor(0, 0, portW, portH);
     } else {
-        require(targetSurfaceId >= 0 && (uint32_t) targetSurfaceId < gl->surfaceCount);
-        require(gl->surfaces[targetSurfaceId] != 0);
         glBindFramebuffer(GL_FRAMEBUFFER, gl->surfaces[targetSurfaceId]);
         int32_t glPortY = gl->gameH - portY - portH;
         glViewport(portX, glPortY, portW, portH);
@@ -732,7 +734,11 @@ static void glEndFrameInit(Renderer* renderer) {
 
     if (gl->isGL3) {
         int32_t appId = gl->base.runner->applicationSurfaceId;
-        GLCommon_beginLetterboxBlit(gl->surfaces[appId], gl->hostFramebuffer);
+        if (appId >= 0 && (uint32_t) appId < gl->surfaceCount && gl->surfaces[appId] != 0) {
+            GLCommon_beginLetterboxBlit(gl->surfaces[appId], gl->hostFramebuffer);
+        } else {
+            glBindFramebuffer(GL_FRAMEBUFFER, gl->hostFramebuffer);
+        }
     }
 }
 
@@ -745,8 +751,12 @@ static void glEndFrameEnd(Renderer* renderer) {
     int32_t appId = gl->base.runner->applicationSurfaceId;
 
     if (gl->isGL3) {
-        GLCommon_beginLetterboxBlit(gl->surfaces[appId], gl->hostFramebuffer);
-        GLCommon_endLetterboxBlit(gl->surfaceWidth[appId], gl->surfaceHeight[appId], gl->gameW, gl->gameH, gl->windowW, gl->windowH, gl->hostFramebuffer);
+        if (appId >= 0 && (uint32_t) appId < gl->surfaceCount && gl->surfaces[appId] != 0) {
+            GLCommon_beginLetterboxBlit(gl->surfaces[appId], gl->hostFramebuffer);
+            GLCommon_endLetterboxBlit(gl->surfaceWidth[appId], gl->surfaceHeight[appId], gl->gameW, gl->gameH, gl->windowW, gl->windowH, gl->hostFramebuffer);
+        } else {
+            glBindFramebuffer(GL_FRAMEBUFFER, gl->hostFramebuffer);
+        }
     } else {
         glBindFramebuffer(GL_FRAMEBUFFER, gl->hostFramebuffer);
         GLboolean scissorWasEnabled = glIsEnabled(GL_SCISSOR_TEST);

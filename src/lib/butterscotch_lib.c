@@ -323,6 +323,7 @@ BUTTERSCOTCH_API void butterscotch_draw(ButterscotchContext* ctx) {
     Runner_drawPost(runner, winW, winH);
     runner->renderer->vtable->endFrameEnd(runner->renderer);
     Runner_drawGUI(runner, winW, winH, gameW, gameH);
+    Runner_handlePendingRoomChange(runner);
 
 #ifdef PLATFORM_ANDROID
     if (ctx->usesHostWindow) eglSwapBuffers(ctx->eglDisplay, ctx->eglSurface);
