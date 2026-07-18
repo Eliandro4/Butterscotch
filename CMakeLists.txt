@@ -920,6 +920,7 @@ elseif(PLATFORM STREQUAL "vita")
 elseif(PLATFORM STREQUAL "libretro")
     # bzip2 needs -fPIC for linking into shared library
     set_target_properties(bzip2 PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    set_target_properties(sha1 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
     if(ENABLE_SW_RENDERER)
         target_sources(butterscotch PRIVATE
