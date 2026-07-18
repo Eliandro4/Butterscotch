@@ -56,7 +56,7 @@ static const char* baseFragmentShader =
 // ===[ Runtime OpenGL extension checks ]===
 
 static bool hasFBO() {
-#if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__) && !defined(__VITA__) && !defined(__SWITCH__)
+#if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__) && !defined(__VITA__) && !defined(__SWITCH__) && !defined(HAVE_LIBRETRO)
     return glGenFramebuffers;
 #else
     return true;
@@ -585,13 +585,12 @@ static void glInit(Renderer* renderer, DataWin* dataWin) {
         logError("GL: The modern-gl renderer requires FBO support\n");
         abort();
     }
-    
-    GMLShader* defaultShader = (GMLShader*)safeCalloc(1, sizeof(GMLShader));
 
-    char vertSrc[1024];
-    char fragSrc[1024];
-    const char* vertHeader = "";
-    const char* fragHeader = "";
+#if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__) && !defined(HAVE_LIBRETRO)
+    gl_init_wrappers();
+#endif
+
+    GMLShader* defaultShader = (GMLShader*)safeCalloc(1, sizeof(GMLShader));
 
     if (modernGl->isGL3) {
         if (modernGl->isGLES) {
