@@ -1,3 +1,4 @@
+#include "butterscotch_android.h"
 #include <jni.h>
 #include "stdio_compat.h"
 #include <stdint.h>
@@ -89,87 +90,128 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, MAYBE_UNUSED void* reserved) {
     return JNI_VERSION_1_6;
 }
 
+static ButterscotchCallbacks gCallbacks = {0};
+
+void Butterscotch_setCallbacks(ButterscotchCallbacks callbacks) {
+    gCallbacks = callbacks;
+}
+
 static void setWindowTitle(const char* title) {
     if (title == nullptr) title = "";
     LOGI("Window title: %s", title);
-    JNIEnv* env = getEnvNoAttach();
-    if (env == nullptr || gNativeClass == nullptr) return;
-    jstring jTitle = (*env)->NewStringUTF(env, title);
-    (*env)->CallStaticVoidMethod(env, gNativeClass, gOnTitleChangedMethod, jTitle);
-    (*env)->DeleteLocalRef(env, jTitle);
+    if (gCallbacks.onTitleChanged) {
+        gCallbacks.onTitleChanged(title, gCallbacks.userData);
+    }
 }
 
 // ===[ JNI exports ]===
 
 #define JNI_FN(name) Java_net_perfectdreams_butterscotch_android_ButterscotchNative_##name
 
-JNIEXPORT void JNICALL JNI_FN(init)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+void Butterscotch_init(void) {
     // Set stdout and stderr to not be buffered
     setvbuf(stdout, nullptr, _IOLBF, 0);
     setvbuf(stderr, nullptr, _IONBF, 0);
     LOGI("Butterscotch native init");
 }
 
-JNIEXPORT jint JNICALL JNI_FN(getTargetFrameHz)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+JNIEXPORT void JNICALL JNI_FN(init)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+    Butterscotch_init();
+}
+
+int Butterscotch_getTargetFrameHz(void) {
     Runner* runner = gRunner;
     if (runner == nullptr || runner->currentRoom == nullptr) return 0;
-    return (jint) runner->currentRoom->speed;
+    return (int) runner->currentRoom->speed;
+}
+
+JNIEXPORT jint JNICALL JNI_FN(getTargetFrameHz)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+    return (jint) Butterscotch_getTargetFrameHz();
 }
 
 // Fills out[4] with the letterboxed game viewport (x, y, w, h) in window pixels, as computed by the last stepAndDraw.
 // This is the same box the runner blits the game into inside the host framebuffer, so the host can post-process the game region without touching the letterbox bars.
-JNIEXPORT void JNICALL JNI_FN(getViewport)(JNIEnv* env, MAYBE_UNUSED jclass cls, jintArray out) {
+void Butterscotch_getViewport(int* out) {
     Runner* runner = gRunner;
-    jint values[4];
     if (runner == nullptr) {
-        values[0] = 0;
-        values[1] = 0;
-        values[2] = 0;
-        values[3] = 0;
+        out[0] = 0;
+        out[1] = 0;
+        out[2] = 0;
+        out[3] = 0;
     } else {
-        values[0] = (jint) runner->viewportX;
-        values[1] = (jint) runner->viewportY;
-        values[2] = (jint) runner->viewportW;
-        values[3] = (jint) runner->viewportH;
+        out[0] = (int) runner->viewportX;
+        out[1] = (int) runner->viewportY;
+        out[2] = (int) runner->viewportW;
+        out[3] = (int) runner->viewportH;
     }
-    (*env)->SetIntArrayRegion(env, out, 0, 4, values);
 }
 
-JNIEXPORT jint JNICALL JNI_FN(getRoomCount)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+JNIEXPORT void JNICALL JNI_FN(getViewport)(JNIEnv* env, MAYBE_UNUSED jclass cls, jintArray out) {
+    int values[4];
+    Butterscotch_getViewport(values);
+    (*env)->SetIntArrayRegion(env, out, 0, 4, (jint*) values);
+}
+
+int Butterscotch_getRoomCount(void) {
     Runner* runner = gRunner;
     if (runner == nullptr || runner->currentRoom == nullptr) return 0;
     return runner->dataWin->room.count;
 }
 
-JNIEXPORT jstring JNICALL JNI_FN(getRoomName)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint roomIndex) {
-    Runner* runner = gRunner;
-    if (runner == nullptr || runner->currentRoom == nullptr) return 0;
-    return (*env)->NewStringUTF(env, runner->dataWin->room.rooms[roomIndex].name);
+JNIEXPORT jint JNICALL JNI_FN(getRoomCount)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+    return (jint) Butterscotch_getRoomCount();
 }
 
-JNIEXPORT void JNICALL JNI_FN(gotoRoom)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint roomIndex) {
+const char* Butterscotch_getRoomName(int roomIndex) {
+    Runner* runner = gRunner;
+    if (runner == nullptr || runner->currentRoom == nullptr) return nullptr;
+    return runner->dataWin->room.rooms[roomIndex].name;
+}
+
+JNIEXPORT jstring JNICALL JNI_FN(getRoomName)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint roomIndex) {
+    const char* name = Butterscotch_getRoomName((int) roomIndex);
+    return name ? (*env)->NewStringUTF(env, name) : 0;
+}
+
+void Butterscotch_gotoRoom(int roomIndex) {
     Runner* runner = gRunner;
     if (runner == nullptr || runner->currentRoom == nullptr) return;
     runner->pendingRoom = roomIndex;
 }
 
-JNIEXPORT void JNICALL JNI_FN(setWidescreenHackAspectRatio)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jfloat aspectRatio) {
+JNIEXPORT void JNICALL JNI_FN(gotoRoom)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint roomIndex) {
+    Butterscotch_gotoRoom((int) roomIndex);
+}
+
+void Butterscotch_setWidescreenHackAspectRatio(float aspectRatio) {
     gWidescreenHackAspectRatio = aspectRatio;
 }
 
+JNIEXPORT void JNICALL JNI_FN(setWidescreenHackAspectRatio)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jfloat aspectRatio) {
+    Butterscotch_setWidescreenHackAspectRatio((float) aspectRatio);
+}
+
 // panX/panY are fractions of the (zoomed) view, zoom is a magnification multiplier (1.0 = identity).
-JNIEXPORT void JNICALL JNI_FN(setFreeCamera)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jfloat panX, jfloat panY, jfloat zoom) {
+void Butterscotch_setFreeCamera(float panX, float panY, float zoom) {
     gFreeCamPanX = panX;
     gFreeCamPanY = panY;
     gFreeCamZoom = zoom;
 }
 
-JNIEXPORT void JNICALL JNI_FN(setNormalizedCursorPosition)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jfloat x, jfloat y) {
+JNIEXPORT void JNICALL JNI_FN(setFreeCamera)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jfloat panX, jfloat panY, jfloat zoom) {
+    Butterscotch_setFreeCamera((float) panX, (float) panY, (float) zoom);
+}
+
+void Butterscotch_setNormalizedCursorPosition(float x, float y) {
     gNormalizedCursorX = x;
     gNormalizedCursorY = y;
 }
 
-JNIEXPORT void JNICALL JNI_FN(setMouseButtonState)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint button, jboolean down) {
+JNIEXPORT void JNICALL JNI_FN(setNormalizedCursorPosition)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jfloat x, jfloat y) {
+    Butterscotch_setNormalizedCursorPosition((float) x, (float) y);
+}
+
+void Butterscotch_setMouseButtonState(int button, bool down) {
     Runner* runner = gRunner;
     if (runner == nullptr) return;
 
@@ -180,10 +222,13 @@ JNIEXPORT void JNICALL JNI_FN(setMouseButtonState)(MAYBE_UNUSED JNIEnv* env, MAY
     }
 }
 
+JNIEXPORT void JNICALL JNI_FN(setMouseButtonState)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint button, jboolean down) {
+    Butterscotch_setMouseButtonState((int) button, down == JNI_TRUE);
+}
+
 // ===[ DataWin handle API ]===
 
-JNIEXPORT jlong JNICALL JNI_FN(dataWinParseLight)(JNIEnv* env, MAYBE_UNUSED jclass cls, jstring jWadPath) {
-    const char* wadPath = (*env)->GetStringUTFChars(env, jWadPath, nullptr);
+void* Butterscotch_dataWinParseLight(const char* wadPath) {
     DataWin* dataWin = DataWin_parse(
         wadPath,
         (DataWinParserOptions) {
@@ -191,8 +236,14 @@ JNIEXPORT jlong JNICALL JNI_FN(dataWinParseLight)(JNIEnv* env, MAYBE_UNUSED jcla
             .parseStrg = true,
         }
     );
+    return (void*) dataWin;
+}
+
+JNIEXPORT jlong JNICALL JNI_FN(dataWinParseLight)(JNIEnv* env, MAYBE_UNUSED jclass cls, jstring jWadPath) {
+    const char* wadPath = (*env)->GetStringUTFChars(env, jWadPath, nullptr);
+    void* handle = Butterscotch_dataWinParseLight(wadPath);
     (*env)->ReleaseStringUTFChars(env, jWadPath, wadPath);
-    return (jlong) (uintptr_t) dataWin;
+    return (jlong) (uintptr_t) handle;
 }
 
 static DataWin* requireDataWin(JNIEnv* env, jlong handle) {
@@ -206,10 +257,16 @@ static DataWin* requireDataWin(JNIEnv* env, jlong handle) {
     return dataWin;
 }
 
+void Butterscotch_dataWinFree(void* handle) {
+    DataWin* dataWin = (DataWin*) handle;
+    if (dataWin == nullptr) return;
+    DataWin_free(dataWin);
+}
+
 JNIEXPORT void JNICALL JNI_FN(dataWinFree)(JNIEnv* env, MAYBE_UNUSED jclass cls, jlong handle) {
     DataWin* dataWin = requireDataWin(env, handle);
     if (dataWin == nullptr) return;
-    DataWin_free(dataWin);
+    Butterscotch_dataWinFree((void*) (uintptr_t) handle);
 }
 
 JNIEXPORT jstring JNICALL JNI_FN(dataWinName)(JNIEnv* env, MAYBE_UNUSED jclass cls, jlong handle) {
@@ -226,25 +283,49 @@ JNIEXPORT jstring JNICALL JNI_FN(dataWinDisplayName)(JNIEnv* env, MAYBE_UNUSED j
     return (name != nullptr && name[0] != '\0') ? (*env)->NewStringUTF(env, name) : nullptr;
 }
 
+int Butterscotch_dataWinWadVersion(void* handle) {
+    DataWin* dataWin = (DataWin*) handle;
+    if (dataWin == nullptr) return 0;
+    return (int) dataWin->gen8.wadVersion;
+}
+
 JNIEXPORT jint JNICALL JNI_FN(dataWinWadVersion)(JNIEnv* env, MAYBE_UNUSED jclass cls, jlong handle) {
     DataWin* dataWin = requireDataWin(env, handle);
     if (dataWin == nullptr) return 0;
-    return (jint) dataWin->gen8.wadVersion;
+    return (jint) Butterscotch_dataWinWadVersion((void*) (uintptr_t) handle);
+}
+
+void Butterscotch_dataWinGmsVersion(void* handle, char* outBuffer, int bufferSize) {
+    DataWin* dataWin = (DataWin*) handle;
+    if (dataWin == nullptr) {
+        if (bufferSize > 0) outBuffer[0] = '\0';
+        return;
+    }
+    snprintf(outBuffer, bufferSize, "%u.%u.%u.%u", dataWin->gen8.major, dataWin->gen8.minor, dataWin->gen8.release, dataWin->gen8.build);
 }
 
 JNIEXPORT jstring JNICALL JNI_FN(dataWinGmsVersion)(JNIEnv* env, MAYBE_UNUSED jclass cls, jlong handle) {
     DataWin* dataWin = requireDataWin(env, handle);
     if (dataWin == nullptr) return nullptr;
     char buf[64];
-    snprintf(buf, sizeof(buf), "%u.%u.%u.%u", dataWin->gen8.major, dataWin->gen8.minor, dataWin->gen8.release, dataWin->gen8.build);
+    Butterscotch_dataWinGmsVersion((void*) (uintptr_t) handle, buf, sizeof(buf));
     return (*env)->NewStringUTF(env, buf);
+}
+
+void Butterscotch_dataWinDetectedGmsVersion(void* handle, char* outBuffer, int bufferSize) {
+    DataWin* dataWin = (DataWin*) handle;
+    if (dataWin == nullptr) {
+        if (bufferSize > 0) outBuffer[0] = '\0';
+        return;
+    }
+    snprintf(outBuffer, bufferSize, "%u.%u.%u.%u", dataWin->detectedFormat.major, dataWin->detectedFormat.minor, dataWin->detectedFormat.release, dataWin->detectedFormat.build);
 }
 
 JNIEXPORT jstring JNICALL JNI_FN(dataWinDetectedGmsVersion)(JNIEnv* env, MAYBE_UNUSED jclass cls, jlong handle) {
     DataWin* dataWin = requireDataWin(env, handle);
     if (dataWin == nullptr) return nullptr;
     char buf[64];
-    snprintf(buf, sizeof(buf), "%u.%u.%u.%u", dataWin->detectedFormat.major, dataWin->detectedFormat.minor, dataWin->detectedFormat.release, dataWin->detectedFormat.build);
+    Butterscotch_dataWinDetectedGmsVersion((void*) (uintptr_t) handle, buf, sizeof(buf));
     return (*env)->NewStringUTF(env, buf);
 }
 
@@ -358,9 +439,8 @@ static bool startRunnerFromPath(const char* dataWinPath, const char* savesPath, 
     if (initialTitle == nullptr || initialTitle[0] == '\0') initialTitle = dataWin->gen8.name;
     setWindowTitle(initialTitle);
 
-    JNIEnv* env = getEnvNoAttach();
-    if (env != nullptr && gNativeClass != nullptr && gOnGameSizeChangedMethod != nullptr) {
-        (*env)->CallStaticVoidMethod(env, gNativeClass, gOnGameSizeChangedMethod, (jint) dataWin->gen8.defaultWindowWidth, (jint) dataWin->gen8.defaultWindowHeight);
+    if (gCallbacks.onGameSizeChanged) {
+        gCallbacks.onGameSizeChanged((int) dataWin->gen8.defaultWindowWidth, (int) dataWin->gen8.defaultWindowHeight, gCallbacks.userData);
     }
 
     Runner_initFirstRoom(runner);
@@ -400,18 +480,16 @@ static void teardownRunner() {
     DataWin_free(dataWin);
 }
 
-JNIEXPORT jboolean JNICALL JNI_FN(startRunner)(JNIEnv* env, MAYBE_UNUSED jclass cls, jstring jDataWinPath, jstring jSavesPath, jint jOsType, jint jHostFramebuffer) {
+bool Butterscotch_startRunner(const char* dataWinPath, const char* savesPath, int osType, int hostFramebuffer) {
     if (gRunner != nullptr) {
         LOGW("startRunner called while a runner is already alive; ignoring");
-        return JNI_FALSE;
+        return false;
     }
-    gHostFramebuffer = (GLuint) jHostFramebuffer;
-    const char* dataWinPath = (*env)->GetStringUTFChars(env, jDataWinPath, nullptr);
-    const char* savesPath   = (*env)->GetStringUTFChars(env, jSavesPath,   nullptr);
+    gHostFramebuffer = (GLuint) hostFramebuffer;
     char** gameArgs = nullptr;
     arrput(gameArgs, safeStrdup("butterscotch")); // Synthetic argv[0]
 
-    bool ok = startRunnerFromPath(dataWinPath, savesPath, gameArgs, jOsType);
+    bool ok = startRunnerFromPath(dataWinPath, savesPath, gameArgs, osType);
     gWidescreenHackAspectRatio = 0.0f; // Reset the widescreen hack aspect ratio
     gFreeCamPanX = 0.0f; // Reset the free camera back to identity
     gFreeCamPanY = 0.0f;
@@ -419,34 +497,56 @@ JNIEXPORT jboolean JNICALL JNI_FN(startRunner)(JNIEnv* env, MAYBE_UNUSED jclass 
 
     repeat(arrlen(gameArgs), i) free(gameArgs[i]);
     arrfree(gameArgs);
+    return ok;
+}
+
+JNIEXPORT jboolean JNICALL JNI_FN(startRunner)(JNIEnv* env, MAYBE_UNUSED jclass cls, jstring jDataWinPath, jstring jSavesPath, jint jOsType, jint jHostFramebuffer) {
+    const char* dataWinPath = (*env)->GetStringUTFChars(env, jDataWinPath, nullptr);
+    const char* savesPath   = (*env)->GetStringUTFChars(env, jSavesPath,   nullptr);
+    
+    bool ok = Butterscotch_startRunner(dataWinPath, savesPath, (int) jOsType, (int) jHostFramebuffer);
+    
     (*env)->ReleaseStringUTFChars(env, jDataWinPath, dataWinPath);
     (*env)->ReleaseStringUTFChars(env, jSavesPath,   savesPath);
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 
-JNIEXPORT jlong JNICALL JNI_FN(getRunningDataWinHandle)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+void* Butterscotch_getRunningDataWinHandle(void) {
     if (gRunner == nullptr)
-        return -1;
+        return nullptr;
 
-    return (jlong) gRunner->dataWin;
+    return (void*) gRunner->dataWin;
 }
 
-JNIEXPORT jlong JNICALL JNI_FN(getRunnerFrameCount)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+JNIEXPORT jlong JNICALL JNI_FN(getRunningDataWinHandle)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+    void* handle = Butterscotch_getRunningDataWinHandle();
+    return handle ? (jlong) (uintptr_t) handle : -1;
+}
+
+long long Butterscotch_getRunnerFrameCount(void) {
     if (gRunner == nullptr)
         return -1;
 
     return gRunner->frameCount;
 }
 
+JNIEXPORT jlong JNICALL JNI_FN(getRunnerFrameCount)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+    return (jlong) Butterscotch_getRunnerFrameCount();
+}
 
-JNIEXPORT jboolean JNICALL JNI_FN(isProfilerEnabled)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+
+bool Butterscotch_isProfilerEnabled(void) {
     if (gRunner == nullptr)
         return false;
 
     return gRunner->vmContext->profiler != nullptr;
 }
 
-JNIEXPORT void JNICALL JNI_FN(setProfilerEnabled)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jboolean enabled) {
+JNIEXPORT jboolean JNICALL JNI_FN(isProfilerEnabled)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+    return Butterscotch_isProfilerEnabled() ? JNI_TRUE : JNI_FALSE;
+}
+
+void Butterscotch_setProfilerEnabled(bool enabled) {
     if (gRunner == nullptr)
         return;
 
@@ -457,14 +557,22 @@ JNIEXPORT void JNICALL JNI_FN(setProfilerEnabled)(MAYBE_UNUSED JNIEnv* env, MAYB
     Profiler_setEnabled(&gRunner->vmContext->profiler, enabled);
 }
 
-JNIEXPORT jlong JNICALL JNI_FN(getProfilerStartedAtFrame)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+JNIEXPORT void JNICALL JNI_FN(setProfilerEnabled)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jboolean enabled) {
+    Butterscotch_setProfilerEnabled(enabled == JNI_TRUE);
+}
+
+long long Butterscotch_getProfilerStartedAtFrame(void) {
     if (gRunner == nullptr)
         return -1;
 
     return gProfilerStartedAtFrame;
 }
 
-JNIEXPORT jlong JNICALL JNI_FN(getProfilerEntriesCount)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+JNIEXPORT jlong JNICALL JNI_FN(getProfilerStartedAtFrame)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+    return (jlong) Butterscotch_getProfilerStartedAtFrame();
+}
+
+long long Butterscotch_getProfilerEntriesCount(void) {
     if (gRunner == nullptr)
         return 0;
 
@@ -474,17 +582,26 @@ JNIEXPORT jlong JNICALL JNI_FN(getProfilerEntriesCount)(MAYBE_UNUSED JNIEnv* env
     return shlen(gRunner->vmContext->profiler->entries);
 }
 
-JNIEXPORT jstring JNICALL JNI_FN(getProfilerEntryKey)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jlong index) {
-    if (gRunner == nullptr)
-        return 0;
-
-    if (gRunner->vmContext->profiler == nullptr)
-        return 0;
-
-    return (*env)->NewStringUTF(env, gRunner->vmContext->profiler->entries[index].key);
+JNIEXPORT jlong JNICALL JNI_FN(getProfilerEntriesCount)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+    return (jlong) Butterscotch_getProfilerEntriesCount();
 }
 
-JNIEXPORT jlong JNICALL JNI_FN(getProfilerEntryNanos)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jlong index) {
+const char* Butterscotch_getProfilerEntryKey(long long index) {
+    if (gRunner == nullptr)
+        return nullptr;
+
+    if (gRunner->vmContext->profiler == nullptr)
+        return nullptr;
+
+    return gRunner->vmContext->profiler->entries[index].key;
+}
+
+JNIEXPORT jstring JNICALL JNI_FN(getProfilerEntryKey)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jlong index) {
+    const char* key = Butterscotch_getProfilerEntryKey((long long) index);
+    return key ? (*env)->NewStringUTF(env, key) : 0;
+}
+
+long long Butterscotch_getProfilerEntryNanos(long long index) {
     if (gRunner == nullptr)
         return 0;
 
@@ -494,7 +611,11 @@ JNIEXPORT jlong JNICALL JNI_FN(getProfilerEntryNanos)(MAYBE_UNUSED JNIEnv* env, 
     return gRunner->vmContext->profiler->entries[index].value.nanos;
 }
 
-JNIEXPORT jlong JNICALL JNI_FN(getProfilerEntryOps)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jlong index) {
+JNIEXPORT jlong JNICALL JNI_FN(getProfilerEntryNanos)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jlong index) {
+    return (jlong) Butterscotch_getProfilerEntryNanos((long long) index);
+}
+
+long long Butterscotch_getProfilerEntryOps(long long index) {
     if (gRunner == nullptr)
         return 0;
 
@@ -504,7 +625,11 @@ JNIEXPORT jlong JNICALL JNI_FN(getProfilerEntryOps)(MAYBE_UNUSED JNIEnv* env, MA
     return gRunner->vmContext->profiler->entries[index].value.ops;
 }
 
-JNIEXPORT void JNICALL JNI_FN(beginFrame)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+JNIEXPORT jlong JNICALL JNI_FN(getProfilerEntryOps)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jlong index) {
+    return (jlong) Butterscotch_getProfilerEntryOps((long long) index);
+}
+
+void Butterscotch_beginFrame(void) {
     Runner* runner = gRunner;
     if (runner == nullptr) return;
     RunnerKeyboard_beginFrame(runner->keyboard);
@@ -522,25 +647,41 @@ JNIEXPORT void JNICALL JNI_FN(beginFrame)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED
     RunnerMouse_beginFrame(runner->mouse);
 }
 
-JNIEXPORT void JNICALL JNI_FN(onKeyDown)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint keyCode) {
+JNIEXPORT void JNICALL JNI_FN(beginFrame)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+    Butterscotch_beginFrame();
+}
+
+void Butterscotch_onKeyDown(int keyCode) {
     Runner* runner = gRunner;
     if (runner == nullptr) return;
     if (keyCode < 0 || keyCode >= GML_KEY_COUNT) return;
     RunnerKeyboard_onKeyDown(runner->keyboard, keyCode);
 }
 
-JNIEXPORT void JNICALL JNI_FN(onKeyUp)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint keyCode) {
+JNIEXPORT void JNICALL JNI_FN(onKeyDown)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint keyCode) {
+    Butterscotch_onKeyDown((int) keyCode);
+}
+
+void Butterscotch_onKeyUp(int keyCode) {
     Runner* runner = gRunner;
     if (runner == nullptr) return;
     if (keyCode < 0 || keyCode >= GML_KEY_COUNT) return;
     RunnerKeyboard_onKeyUp(runner->keyboard, keyCode);
 }
 
-JNIEXPORT void JNICALL JNI_FN(onCharacter)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint codePoint) {
+JNIEXPORT void JNICALL JNI_FN(onKeyUp)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint keyCode) {
+    Butterscotch_onKeyUp((int) keyCode);
+}
+
+void Butterscotch_onCharacter(int codePoint) {
     Runner* runner = gRunner;
     if (runner == nullptr) return;
     if (codePoint <= 0) return;
     RunnerKeyboard_onCharacter(runner->keyboard, (unsigned int) codePoint);
+}
+
+JNIEXPORT void JNICALL JNI_FN(onCharacter)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint codePoint) {
+    Butterscotch_onCharacter((int) codePoint);
 }
 
 // ===[ Gamepad input ]===
@@ -565,15 +706,19 @@ static void androidGamepadEnsureConnected(GamepadSlot* slot, const char* name) {
     }
 }
 
-JNIEXPORT void JNICALL JNI_FN(gamepadConnected)(JNIEnv* env, MAYBE_UNUSED jclass cls, jint device, jstring jName) {
+void Butterscotch_gamepadConnected(int device, const char* name) {
     GamepadSlot* slot = androidGamepadSlot(device);
     if (slot == nullptr) return;
-    const char* name = (jName != nullptr) ? (*env)->GetStringUTFChars(env, jName, nullptr) : nullptr;
     androidGamepadEnsureConnected(slot, name);
+}
+
+JNIEXPORT void JNICALL JNI_FN(gamepadConnected)(JNIEnv* env, MAYBE_UNUSED jclass cls, jint device, jstring jName) {
+    const char* name = (jName != nullptr) ? (*env)->GetStringUTFChars(env, jName, nullptr) : nullptr;
+    Butterscotch_gamepadConnected((int) device, name);
     if (name != nullptr) (*env)->ReleaseStringUTFChars(env, jName, name);
 }
 
-JNIEXPORT void JNICALL JNI_FN(gamepadDisconnected)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint device) {
+void Butterscotch_gamepadDisconnected(int device) {
     GamepadSlot* slot = androidGamepadSlot(device);
     if (slot == nullptr) return;
     if (slot->connected && gRunner->gamepads->connectedCount > 0) {
@@ -590,12 +735,16 @@ JNIEXPORT void JNICALL JNI_FN(gamepadDisconnected)(MAYBE_UNUSED JNIEnv* env, MAY
     memset(slot->axisValue, 0, sizeof(slot->axisValue));
 }
 
-JNIEXPORT void JNICALL JNI_FN(gamepadButton)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint device, jint button, jboolean down) {
+JNIEXPORT void JNICALL JNI_FN(gamepadDisconnected)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint device) {
+    Butterscotch_gamepadDisconnected((int) device);
+}
+
+void Butterscotch_gamepadButton(int device, int button, bool down) {
     GamepadSlot* slot = androidGamepadSlot(device);
     if (slot == nullptr) return;
     if (button < 0 || button >= GP_BUTTON_COUNT) return;
     androidGamepadEnsureConnected(slot, nullptr);
-    bool isDown = (down == JNI_TRUE);
+    bool isDown = down;
     bool wasDown = slot->buttonDown[button];
     // Edge detection mirrors the keyboard path: pressed/released are one-frame flags cleared by beginFrame, so we only raise them on an actual transition.
     if (isDown && !wasDown) slot->buttonPressed[button] = true;
@@ -604,7 +753,11 @@ JNIEXPORT void JNICALL JNI_FN(gamepadButton)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNU
     slot->buttonValue[button] = isDown ? 1.0f : 0.0f;
 }
 
-JNIEXPORT void JNICALL JNI_FN(gamepadAxis)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint device, jint axis, jfloat value) {
+JNIEXPORT void JNICALL JNI_FN(gamepadButton)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint device, jint button, jboolean down) {
+    Butterscotch_gamepadButton((int) device, (int) button, down == JNI_TRUE);
+}
+
+void Butterscotch_gamepadAxis(int device, int axis, float value) {
     GamepadSlot* slot = androidGamepadSlot(device);
     if (slot == nullptr) return;
     if (axis < 0 || axis >= GP_AXIS_COUNT) return;
@@ -613,6 +766,10 @@ JNIEXPORT void JNICALL JNI_FN(gamepadAxis)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSE
     if (value < -1.0f) value = -1.0f;
     if (value > 1.0f) value = 1.0f;
     slot->axisValue[axis] = value;
+}
+
+JNIEXPORT void JNICALL JNI_FN(gamepadAxis)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint device, jint axis, jfloat value) {
+    Butterscotch_gamepadAxis((int) device, (int) axis, (float) value);
 }
 
 #define BUTTERSCOTCH_DROID_CONTINUE 0
@@ -683,7 +840,7 @@ static bool performGameChange(const char* workingDirectory, char* launchParamete
     return ok;
 }
 
-JNIEXPORT jint JNICALL JNI_FN(stepAndDraw)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint winW, jint winH, jfloat deltaTime) {
+int Butterscotch_stepAndDraw(int winW, int winH, float deltaTime) {
     Runner* runner = gRunner;
     runner->deltaTime = deltaTime * 1000000;
 
@@ -787,24 +944,36 @@ JNIEXPORT jint JNICALL JNI_FN(stepAndDraw)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSE
     return shouldSwap ? BUTTERSCOTCH_DROID_CONTINUE : BUTTERSCOTCH_DROID_CONTINUE_NO_SWAP;
 }
 
+JNIEXPORT jint JNICALL JNI_FN(stepAndDraw)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls, jint winW, jint winH, jfloat deltaTime) {
+    return (jint) Butterscotch_stepAndDraw((int) winW, (int) winH, (float) deltaTime);
+}
+
 // Suspend the audio backend without tearing the runner down (the app was backgrounded).
 // The miniaudio device mixes on its own thread, so just parking the render loop wouldn't silence it; we have to stop the device
-JNIEXPORT void JNICALL JNI_FN(suspendAudio)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+void Butterscotch_suspendAudio(void) {
     if (gRunner == nullptr || gRunner->audioSystem == nullptr)
         return;
 
     gRunner->audioSystem->vtable->suspend(gRunner->audioSystem);
 }
 
+JNIEXPORT void JNICALL JNI_FN(suspendAudio)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+    Butterscotch_suspendAudio();
+}
+
 // Resume the audio backend after a suspendAudio (the app came back to the foreground)
-JNIEXPORT void JNICALL JNI_FN(resumeAudio)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+void Butterscotch_resumeAudio(void) {
     if (gRunner == nullptr || gRunner->audioSystem == nullptr)
         return;
 
     gRunner->audioSystem->vtable->resume(gRunner->audioSystem);
 }
 
-JNIEXPORT void JNICALL JNI_FN(stopRunner)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+JNIEXPORT void JNICALL JNI_FN(resumeAudio)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+    Butterscotch_resumeAudio();
+}
+
+void Butterscotch_stopRunner(void) {
     if (gRunner == nullptr)
         return;
 
@@ -816,4 +985,8 @@ JNIEXPORT void JNICALL JNI_FN(stopRunner)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED
     gCurrentDataWinPath = nullptr;
     free(gSavesPath);
     gSavesPath = nullptr;
+}
+
+JNIEXPORT void JNICALL JNI_FN(stopRunner)(MAYBE_UNUSED JNIEnv* env, MAYBE_UNUSED jclass cls) {
+    Butterscotch_stopRunner();
 }
