@@ -123,7 +123,7 @@ option(ENABLE_WAD14 "Enable support for WAD Version 14 and below" ON)
 option(ENABLE_WAD16 "Enable support for WAD Version 15/16" ON)
 option(ENABLE_WAD17 "Enable support for WAD Version 17" ON)
 option(ENABLE_LEGACY_GL "Enable the legacy OpenGL renderer" ON)
-if(PLATFORM STREQUAL "switch")
+if(PLATFORM STREQUAL "switch" OR PLATFORM STREQUAL "libretro")
     set(ENABLE_LEGACY_GL OFF CACHE BOOL "Enable the legacy OpenGL renderer" FORCE)
 endif()
 option(ENABLE_MODERN_GL "Enable the modern OpenGL renderer" ON)
@@ -172,7 +172,7 @@ else()
     file(GLOB SOURCES src/*.c)
     # These platforms haven't been converted to the refactored system yet.
     # This list should NEVER grow, all new platforms should use the new system.
-    if(PLATFORM STREQUAL "ps2" OR PLATFORM STREQUAL "ps3" OR PLATFORM STREQUAL "web" OR PLATFORM STREQUAL "android")
+    if(PLATFORM STREQUAL "ps2" OR PLATFORM STREQUAL "ps3" OR PLATFORM STREQUAL "web" OR PLATFORM STREQUAL "android" OR PLATFORM STREQUAL "libretro")
         list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/loop.c")
     endif()
 endif()
@@ -206,7 +206,7 @@ elseif(AUDIO_BACKEND STREQUAL "miniaudio")
     target_include_directories(butterscotch SYSTEM PUBLIC vendor/miniaudio)
     target_include_directories(butterscotch PUBLIC src/audio/miniaudio)
     add_compile_definitions(USE_MINIAUDIO)
-    if (NOT WIN32)
+    if (NOT WIN32 AND NOT ANDROID)
         set(AUDIO_LIBRARIES pthread)
     endif()
 elseif(AUDIO_BACKEND STREQUAL "web")
@@ -925,7 +925,7 @@ elseif(PLATFORM STREQUAL "libretro")
     if(ENABLE_SW_RENDERER)
         target_sources(butterscotch PRIVATE
             src/sw/sw_renderer.c
-            src/desktop/stb_impl.c
+            src/libretro/stb_impl.c
         )
         target_include_directories(butterscotch PRIVATE
             ${CMAKE_SOURCE_DIR}/src/sw
@@ -934,25 +934,21 @@ elseif(PLATFORM STREQUAL "libretro")
         target_sources(butterscotch PRIVATE
             src/gl/gl_renderer.c
             src/gl_common/gl_common.c
-            src/libretro/libretro-common/glsm/glsm.c
-            src/libretro/libretro-common/glsym/rglgen.c
+            vendor/libretro/glsm/glsm.c
+            vendor/libretro/glsym/rglgen.c
         )
 
-        if(USING_GLES)
-            target_sources(butterscotch PRIVATE src/libretro/libretro-common/glsym/glsym_es3.c)
+        if(ANDROID)
+            target_sources(butterscotch PRIVATE vendor/libretro/glsym/glsym_es3.c)
             target_compile_definitions(butterscotch PRIVATE HAVE_OPENGLES HAVE_OPENGLES3)
-            find_library(GLES2_LIB GLESv2)
-            target_link_libraries(butterscotch PRIVATE ${GLES2_LIB})
             target_compile_definitions(butterscotch PRIVATE GLclampd=GLclampf)
         else()
-            target_sources(butterscotch PRIVATE src/libretro/libretro-common/glsym/glsym_gl.c)
+            target_sources(butterscotch PRIVATE vendor/libretro/glsym/glsym_gl.c)
             target_compile_definitions(butterscotch PRIVATE HAVE_OPENGL)
-            find_package(OpenGL REQUIRED)
-            target_link_libraries(butterscotch PRIVATE OpenGL::GL)
         endif()
 
         set_source_files_properties(
-            src/libretro/libretro-common/glsm/glsm.c
+            vendor/libretro/glsm/glsm.c
             PROPERTIES COMPILE_OPTIONS "-w"
         )
         target_include_directories(butterscotch PRIVATE
@@ -963,14 +959,15 @@ elseif(PLATFORM STREQUAL "libretro")
     endif()
     target_sources(butterscotch PRIVATE
         src/image/image_decoder.c
-        src/desktop/stb_impl.c
+        src/libretro/stb_impl.c
+        src/debug_font/debug_font.c
     )
 
     target_include_directories(butterscotch PRIVATE
         ${CMAKE_SOURCE_DIR}/src/image
-        ${CMAKE_SOURCE_DIR}/src/desktop
         ${CMAKE_SOURCE_DIR}/src/libretro
-        ${CMAKE_SOURCE_DIR}/src/libretro/libretro-common/include
+        ${CMAKE_SOURCE_DIR}/src/debug_font
+        vendor/libretro/include
         vendor/stb/image
         vendor/stb/vorbis
     )
@@ -991,7 +988,11 @@ elseif(PLATFORM STREQUAL "libretro")
     find_library(DL_LIB dl)
     find_library(ATOMIC_LIB atomic)
 
-    target_link_libraries(butterscotch PRIVATE bzip2 stb_ds sha1 m ${DL_LIB} ${AUDIO_LIBRARIES})
+    if(ANDROID)
+        target_link_libraries(butterscotch PRIVATE bzip2 stb_ds sha1 m GLESv3 ${DL_LIB} ${AUDIO_LIBRARIES})
+    else()
+        target_link_libraries(butterscotch PRIVATE bzip2 stb_ds sha1 m GL ${DL_LIB} ${AUDIO_LIBRARIES})
+    endif()
     if(ATOMIC_LIB)
         target_link_libraries(butterscotch PRIVATE ${ATOMIC_LIB})
     endif()

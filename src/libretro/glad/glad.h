@@ -1,3 +1,4 @@
+#define GL_GLEXT_PROTOTYPES
 #include <glsm/glsmsym.h>
 #define glDeleteFramebuffersEXT glDeleteFramebuffers
 #define glFramebufferTexture2DEXT glFramebufferTexture2D

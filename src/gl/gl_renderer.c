@@ -567,6 +567,10 @@ static bool compileProgram(GMLShader* gmlShader, const char* name, const char* v
 }
 
 static void glInit(Renderer* renderer, DataWin* dataWin) {
+    const char* vertHeader = "";
+    const char* fragHeader = "";
+    char vertSrc[1024];
+    char fragSrc[1024];
     GLRenderer* gl = (GLRenderer*) renderer;
     GLModernRenderer *modernGl = (GLModernRenderer*) renderer;
     renderer->dataWin = dataWin;

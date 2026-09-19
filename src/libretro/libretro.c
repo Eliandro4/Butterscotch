@@ -18,7 +18,7 @@
 #endif
 #include "libretro_audio_system.h"
 #include "overlay_file_system.h"
-#include "desktop/platformdefs.h"
+#include "platformdefs.h"
 #include "utils.h"
 
 static retro_log_printf_t          log_cb;
@@ -27,6 +27,22 @@ static retro_input_poll_t          input_poll_cb;
 static retro_input_state_t         input_state_cb;
 static retro_audio_sample_batch_t  audio_batch_cb;
 static retro_environment_t         environ_cb;
+
+#include "log.h"
+
+void platformLog(const logType type, const char *format, va_list va) {
+    char buffer[4096];
+    vsnprintf(buffer, sizeof(buffer), format, va);
+    if (log_cb) {
+        enum retro_log_level level = RETRO_LOG_INFO;
+        if (type == LOG_TYPE_WARNING) level = RETRO_LOG_WARN;
+        else if (type == LOG_TYPE_ERROR) level = RETRO_LOG_ERROR;
+        else if (type == LOG_TYPE_DEBUG) level = RETRO_LOG_DEBUG;
+        log_cb(level, "%s", buffer);
+    } else {
+        fputs(buffer, stderr);
+    }
+}
 
 static Runner*            g_runner   = nullptr;
 static Renderer*          g_renderer = nullptr;
@@ -145,11 +161,12 @@ static void context_reset(void)
 
 #if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
   g_renderer = GLRenderer_create();
-  GLRenderer* gl = (GLRenderer*)g_renderer;
+  GLModernRenderer* gl = (GLModernRenderer*)g_renderer;
   gl->hostFramebuffer = glsm_get_current_framebuffer();
-#if defined(HAVE_OPENGLES)
-  gl->isGLES = true;
-#endif
+  const char* gl_version = (const char*)glGetString(GL_VERSION);
+  if (gl_version && strstr(gl_version, "OpenGL ES")) {
+      gl->isGLES = true;
+  }
 #endif
 
   LibretroAudioSystem* maAudio = LibretroAudioSystem_create(g_dataWin, 44100);
@@ -157,7 +174,7 @@ static void context_reset(void)
 
   g_runner = Runner_create(g_dataWin, g_vm,
                             g_renderer,
-                            (FileSystem *)g_overlayFs, audio);
+                            (FileSystem *)g_overlayFs, audio, 0);
   g_runner->osType          = OS_WINDOWS;
   g_runner->setWindowSize   = platformSetWindowSize;
   g_runner->getWindowSize   = platformGetWindowSize;
@@ -414,6 +431,8 @@ void retro_init(void)
   params.stencil         = false;
 #if defined(HAVE_OPENGLES)
   params.context_type = RETRO_HW_CONTEXT_OPENGLES_VERSION;
+  params.major = 3;
+  params.minor = 0;
 #else
   params.context_type = RETRO_HW_CONTEXT_OPENGL;
 #endif
@@ -726,7 +745,7 @@ void retro_run(void)
         g_overlayFs = OverlayFileSystem_create(newDir, newDir);
         free(newDir);
 
-      g_runner = Runner_create(g_dataWin, g_vm, g_renderer, (FileSystem*)g_overlayFs, audio);
+      g_runner = Runner_create(g_dataWin, g_vm, g_renderer, (FileSystem*)g_overlayFs, audio, 0);
       g_runner->osType = OS_WINDOWS;
       g_runner->setWindowSize   = platformSetWindowSize;
       g_runner->getWindowSize   = platformGetWindowSize;
