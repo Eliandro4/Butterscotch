@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -108,6 +109,14 @@ fun SettingsScreen(
                     title = "Game Logs",
                     subtitle = "View the game logs",
                     onClick = { nav.navigate(Route.GameLogs(gameId.toString())) },
+                )
+            }
+            item("update-game") {
+                OverviewRow(
+                    icon = Icons.Filled.SystemUpdate,
+                    title = "Update Game",
+                    subtitle = "Update the game by overwriting with a new version",
+                    onClick = { nav.navigate(Route.UpdateGame(gameId.toString())) },
                 )
             }
             item("delete") {

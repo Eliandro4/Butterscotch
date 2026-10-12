@@ -302,6 +302,24 @@ class GameLibrary private constructor(
 
     data class StagedGame(val id: UUID, val bundleDir: File, val savesDir: File)
 
+
+    /**
+     * Update game files by overwriting the bundle directory with files from a staged game.
+     * This directly overwrites existing files without deleting the entire bundle first.
+     */
+    fun updateGameFiles(staged: StagedGame, gameId: UUID) {
+        val entry = findById(gameId) ?: error("Game not found")
+        val bundleDir = bundleDir(entry)
+        // Clear existing bundle contents
+        bundleDir.listFiles()?.forEach { it.deleteRecursively() }
+        // Copy new files
+        staged.bundleDir.listFiles()?.forEach { child ->
+            child.copyRecursively(File(bundleDir, child.name), overwrite = true)
+        }
+        save()
+    }
+
+
     companion object {
         private const val TAG = "GameLibrary"
         private const val ROOT_DIR_NAME = "butterscotch"

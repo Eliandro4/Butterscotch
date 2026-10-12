@@ -18,5 +18,6 @@ sealed interface Route {
     @Serializable data class GameSettings(val gameId: String) : Route
     @Serializable data class SaveSlotList(val gameId: String) : Route
     @Serializable data class GameLogs(val gameId: String) : Route
+    @Serializable data class UpdateGame(val gameId: String) : Route
     @Serializable data class SaveSlotDetail(val gameId: String, val slotId: String) : Route
 }
